@@ -108,7 +108,7 @@ export function Sidebar({ className }: SidebarProps) {
       <div className="px-4 py-2 flex items-center justify-between">
         <Link href="/" className="flex items-center">
           <img src="/images/logo.png" alt="Health Tracker" className="h-8 w-8 mr-2" />
-          <h1 className="text-xl font-bold text-primary dark:text-white"><AfiaTrack></h1>
+          <h1 className="text-xl font-bold text-primary dark:text-white">Health Tracker</h1>
         </Link>
         <ModeToggle />
       </div>

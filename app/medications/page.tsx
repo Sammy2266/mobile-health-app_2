@@ -22,10 +22,12 @@ import { useToast } from "@/components/ui/use-toast"
 import { useApp } from "@/context/app-provider"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { BellOff, BellRing, Clock, Plus, Pill, Trash } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { ProtectedRoute } from "@/components/protected-route"
+import { NotificationSetup } from "@/components/notification-setup"
+import { scheduleMedicationReminders } from "@/lib/notification-service"
 
 const medicationFormSchema = z.object({
   name: z.string().min(2, {
@@ -53,6 +55,7 @@ export default function MedicationsPage() {
   const { toast } = useToast()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [reminderTimes, setReminderTimes] = useState<string[]>(["08:00"])
+  const [showNotificationSetup, setShowNotificationSetup] = useState(false)
 
   const form = useForm<MedicationFormValues>({
     resolver: zodResolver(medicationFormSchema),
@@ -65,6 +68,13 @@ export default function MedicationsPage() {
       reminderTimes: ["08:00"],
     },
   })
+
+  // Schedule medication reminders when medications change
+  useEffect(() => {
+    if (medications.length > 0) {
+      scheduleMedicationReminders(medications)
+    }
+  }, [medications])
 
   if (!initialized) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
@@ -85,6 +95,11 @@ export default function MedicationsPage() {
 
     const updatedMedications = [...medications, newMedication]
     updateMedications(updatedMedications)
+
+    // If reminders are enabled, show notification setup if not already shown
+    if (data.reminderEnabled && !showNotificationSetup) {
+      setShowNotificationSetup(true)
+    }
 
     toast({
       title: "Medication Added",
@@ -111,6 +126,11 @@ export default function MedicationsPage() {
       medication.id === id ? { ...medication, reminderEnabled: !currentStatus } : medication,
     )
     updateMedications(updatedMedications)
+
+    // If enabling reminders and notification setup not shown yet, show it
+    if (!currentStatus && !showNotificationSetup) {
+      setShowNotificationSetup(true)
+    }
 
     toast({
       title: currentStatus ? "Reminder Disabled" : "Reminder Enabled",
@@ -335,6 +355,13 @@ export default function MedicationsPage() {
                 </Dialog>
               </div>
 
+              {/* Notification Setup Card */}
+              {showNotificationSetup && (
+                <div className="mb-4">
+                  <NotificationSetup />
+                </div>
+              )}
+
               <div className="grid gap-4">
                 <Card>
                   <CardHeader>
@@ -448,7 +475,7 @@ export default function MedicationsPage() {
                                   </span>
                                 </div>
                               </div>
-                              <div className="flex flex-col md:flex-row md:items-center gap-2 text-sm text-muted-foreground">
+                              <div className="flex flex-col md:flex-row md:items-center gap-2 text-muted-foreground">
                                 <div className="flex items-center">
                                   <Clock className="mr-1 h-4 w-4" />
                                   {new Date(medication.startDate).toLocaleDateString()} -{" "}
