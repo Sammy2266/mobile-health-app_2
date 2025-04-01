@@ -27,7 +27,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { ProtectedRoute } from "@/components/protected-route"
 import { NotificationSetup } from "@/components/notification-setup"
-import { scheduleMedicationReminders } from "@/lib/notification-service"
+import { initNotificationSystem, scheduleMedicationReminders, restoreReminders } from "@/lib/notification-service"
 
 const medicationFormSchema = z.object({
   name: z.string().min(2, {
@@ -69,12 +69,43 @@ export default function MedicationsPage() {
     },
   })
 
+  // Initialize notification system and restore reminders on mount
+  useEffect(() => {
+    const initialize = async () => {
+      if (typeof window !== "undefined") {
+        // Initialize the notification system
+        await initNotificationSystem()
+
+        // Check if any medications have reminders enabled
+        const hasReminders = medications.some(
+          (med) => med.reminderEnabled && med.reminderTimes && med.reminderTimes.length > 0,
+        )
+
+        // Show notification setup if there are medications with reminders
+        if (hasReminders) {
+          setShowNotificationSetup(true)
+
+          // Restore reminders from previous session
+          restoreReminders(medications)
+        }
+      }
+    }
+
+    if (initialized && medications.length > 0) {
+      initialize()
+    }
+  }, [initialized, medications])
+
   // Schedule medication reminders when medications change
   useEffect(() => {
-    if (medications.length > 0) {
+    if (initialized && medications.length > 0) {
+      // Schedule reminders for all medications
       scheduleMedicationReminders(medications)
+
+      // Log for debugging
+      console.log("Medication reminders scheduled/updated")
     }
-  }, [medications])
+  }, [medications, initialized])
 
   if (!initialized) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
@@ -96,9 +127,15 @@ export default function MedicationsPage() {
     const updatedMedications = [...medications, newMedication]
     updateMedications(updatedMedications)
 
-    // If reminders are enabled, show notification setup if not already shown
-    if (data.reminderEnabled && !showNotificationSetup) {
+    // If reminders are enabled, show notification setup
+    if (data.reminderEnabled) {
       setShowNotificationSetup(true)
+
+      // Initialize notification system if adding first medication with reminder
+      initNotificationSystem().then(() => {
+        // Schedule reminders for the new medication
+        scheduleMedicationReminders(updatedMedications)
+      })
     }
 
     toast({
@@ -115,6 +152,9 @@ export default function MedicationsPage() {
     const updatedMedications = medications.filter((medication) => medication.id !== id)
     updateMedications(updatedMedications)
 
+    // Update reminders after deletion
+    scheduleMedicationReminders(updatedMedications)
+
     toast({
       title: "Medication Deleted",
       description: "Your medication has been deleted successfully.",
@@ -127,9 +167,13 @@ export default function MedicationsPage() {
     )
     updateMedications(updatedMedications)
 
-    // If enabling reminders and notification setup not shown yet, show it
-    if (!currentStatus && !showNotificationSetup) {
+    // Update reminders after toggling
+    scheduleMedicationReminders(updatedMedications)
+
+    // If enabling reminders, show notification setup
+    if (!currentStatus) {
       setShowNotificationSetup(true)
+      initNotificationSystem()
     }
 
     toast({
