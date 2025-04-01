@@ -9,9 +9,12 @@ interface BloodPressureChartProps {
   height?: number
 }
 
-export function BloodPressureChart({ data, height = 300 }: BloodPressureChartProps) {
+export function BloodPressureChart({ data = [], height = 300 }: BloodPressureChartProps) {
+  // Ensure data is an array
+  const safeData = Array.isArray(data) ? data : []
+
   // Sort data by date
-  const sortedData = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const sortedData = [...safeData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // Extract labels (dates) and values
   const labels = sortedData.map((item) => formatChartDate(item.date))

@@ -1,18 +1,15 @@
 import type React from "react"
-import type { Metadata } from "next"
+import "@/app/globals.css"
 import { Inter } from "next/font/google"
-import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
 import { AppProvider } from "@/context/app-provider"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/ui/toaster"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata: Metadata = {
-  title: "AfiaTrack - Mobile Health App",
-  description: "Track and manage your health with AfiaTrack",
-  icons: {
-    icon: "/images/logo.png",
-  },
+export const metadata = {
+  title: "Health Tracker",
+  description: "Track and manage your health data",
     generator: 'v0.dev'
 }
 
@@ -25,7 +22,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AppProvider>{children}</AppProvider>
+          <AppProvider>
+            {children}
+            <Toaster />
+          </AppProvider>
         </ThemeProvider>
       </body>
     </html>

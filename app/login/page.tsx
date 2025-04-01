@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ export default function LoginPage() {
   const [activeTab, setActiveTab] = useState("login")
 
   // Login form state
-  const [loginEmail, setLoginEmail] = useState("")
+  const [loginEmailOrUsername, setLoginEmailOrUsername] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
   const [loginLoading, setLoginLoading] = useState(false)
 
@@ -32,18 +32,19 @@ export default function LoginPage() {
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("")
   const [signupLoading, setSignupLoading] = useState(false)
 
-  // If already authenticated, redirect to dashboard
-  if (isAuthenticated) {
-    router.push("/")
-    return null
-  }
+  // Check authentication status and redirect if needed
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/")
+    }
+  }, [isAuthenticated, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginLoading(true)
 
     // Validate form
-    if (!loginEmail || !loginPassword) {
+    if (!loginEmailOrUsername || !loginPassword) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -55,18 +56,19 @@ export default function LoginPage() {
 
     try {
       // Attempt login
-      const success = await login(loginEmail, loginPassword)
+      const success = await login(loginEmailOrUsername, loginPassword)
 
       if (success) {
         toast({
           title: "Success",
           description: "You have been logged in successfully",
         })
-        router.push("/")
+        // Force navigation after successful login
+        window.location.href = "/"
       } else {
         toast({
           title: "Error",
-          description: "Invalid email or password",
+          description: "Invalid username/email or password",
           variant: "destructive",
         })
       }
@@ -115,11 +117,12 @@ export default function LoginPage() {
           title: "Success",
           description: "Your account has been created successfully",
         })
-        router.push("/")
+        // Force navigation after successful signup
+        window.location.href = "/"
       } else {
         toast({
           title: "Error",
-          description: "Email already exists",
+          description: "Username or email already exists",
           variant: "destructive",
         })
       }
@@ -153,13 +156,12 @@ export default function LoginPage() {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
+                  <Label htmlFor="login-email-username">Username or Email</Label>
                   <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    id="login-email-username"
+                    placeholder="Enter your username or email"
+                    value={loginEmailOrUsername}
+                    onChange={(e) => setLoginEmailOrUsername(e.target.value)}
                     required
                   />
                 </div>

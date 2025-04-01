@@ -9,9 +9,12 @@ interface HeartRateChartProps {
   height?: number
 }
 
-export function HeartRateChart({ data, height = 300 }: HeartRateChartProps) {
+export function HeartRateChart({ data = [], height = 300 }: HeartRateChartProps) {
+  // Ensure data is an array
+  const safeData = Array.isArray(data) ? data : []
+
   // Sort data by date
-  const sortedData = [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const sortedData = [...safeData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // Extract labels (dates) and values
   const labels = sortedData.map((item) => formatChartDate(item.date))
@@ -25,7 +28,7 @@ export function HeartRateChart({ data, height = 300 }: HeartRateChartProps) {
         data: values,
         borderColor: chartColors.red.primary,
         backgroundColor: chartColors.red.background,
-        fill: true,
+        fill: false,
       },
     ],
   }
@@ -38,12 +41,13 @@ export function HeartRateChart({ data, height = 300 }: HeartRateChartProps) {
           text: "BPM",
         },
         suggestedMin: 40,
-        suggestedMax: 120,
+        suggestedMax: 180,
       },
     },
     plugins: {
       tooltip: {
         callbacks: {
+          title: (tooltipItems: any[]) => tooltipItems[0].label,
           label: (context: any) => {
             const label = context.dataset.label || ""
             const value = context.parsed.y

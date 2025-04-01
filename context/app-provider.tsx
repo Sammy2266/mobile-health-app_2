@@ -9,11 +9,11 @@ import {
   type UserHealthData,
   type UserMedication,
   type UserDocument,
-  type UserCredentials,
   defaultProfile,
   defaultSettings,
 } from "@/types/database"
 import * as api from "@/lib/api-client"
+import { toast } from "@/components/ui/use-toast"
 
 interface AppContextType {
   profile: UserProfile
@@ -32,14 +32,14 @@ interface AppContextType {
   initialized: boolean
   currentUserId: string | null
   isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<boolean>
+  login: (emailOrUsername: string, password: string) => Promise<boolean>
   signup: (username: string, email: string, password: string) => Promise<boolean>
   logout: () => void
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
 
-// Helper to get stored user ID from session storage
+// Helper to get stored user ID from session storage (not local storage)
 const getStoredUserId = (): string | null => {
   if (typeof window !== "undefined") {
     return sessionStorage.getItem("currentUserId")
@@ -47,7 +47,7 @@ const getStoredUserId = (): string | null => {
   return null
 }
 
-// Helper to store user ID in session storage
+// Helper to store user ID in session storage (not local storage)
 const storeUserId = (userId: string | null): void => {
   if (typeof window !== "undefined") {
     if (userId) {
@@ -55,27 +55,6 @@ const storeUserId = (userId: string | null): void => {
     } else {
       sessionStorage.removeItem("currentUserId")
     }
-  }
-}
-
-// Local storage fallback functions
-const getFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem(key)
-    if (stored) {
-      try {
-        return JSON.parse(stored) as T
-      } catch (error) {
-        console.error("Error parsing stored data:", error)
-      }
-    }
-  }
-  return defaultValue
-}
-
-const saveToLocalStorage = <T,>(key: string, data: T): void => {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(key, JSON.stringify(data))
   }
 }
 
@@ -95,7 +74,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [initialized, setInitialized] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [useLocalStorage, setUseLocalStorage] = useState(false)
 
   // Initialize data
   useEffect(() => {
@@ -106,103 +84,98 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setCurrentUserId(storedUserId)
 
         try {
-          // Try to load user data from API
-          let userProfile = null
-          let userSettings = null
-          let userAppointments = []
-          let userHealthData = null
-          let userMedications = []
-          let userDocuments = []
+          // Verify the user exists in the database
+          const userExists = await api.verifyUser(storedUserId).catch(() => false)
 
-          try {
-            userProfile = await api.getProfile(storedUserId)
-          } catch (error) {
-            console.log("Profile not found, creating default profile")
-            // Create a default profile if one doesn't exist
-            const defaultUserProfile = {
-              ...defaultProfile,
-              id: storedUserId,
-              name: "User",
-              email: "user@example.com",
-            }
-
-            try {
-              userProfile = await api.updateUserProfile(defaultUserProfile)
-            } catch (profileError) {
-              console.error("Error creating default profile:", profileError)
-              // Fall back to using the default profile in memory
-              userProfile = defaultUserProfile
-            }
+          if (!userExists) {
+            console.error("User not found in database, logging out")
+            logout()
+            return
           }
 
-          try {
-            userSettings = await api.getSettings(storedUserId)
-          } catch (error) {
-            console.log("Settings not found, using defaults")
-          }
+          // Load user data in parallel for faster loading
+          const loadDataPromises = [
+            api
+              .getProfile(storedUserId)
+              .then((userProfile) => {
+                if (userProfile) setProfile(userProfile)
+              })
+              .catch((error) => {
+                console.error("Error loading profile:", error)
+                throw error // Re-throw to be caught by Promise.allSettled
+              }),
 
-          try {
-            userAppointments = await api.getAppointments(storedUserId)
-          } catch (error) {
-            console.log("No appointments found")
-          }
+            api
+              .getSettings(storedUserId)
+              .then((userSettings) => {
+                if (userSettings) setSettings(userSettings)
+              })
+              .catch((error) => {
+                console.error("Error loading settings:", error)
+                // Use default settings
+                setSettings({ ...defaultSettings, userId: storedUserId })
+              }),
 
-          try {
-            userHealthData = await api.getHealthData(storedUserId)
-          } catch (error) {
-            console.log("No health data found")
-          }
+            api
+              .getAppointments(storedUserId)
+              .then((userAppointments) => {
+                if (userAppointments) setAppointments(userAppointments)
+              })
+              .catch((error) => {
+                console.error("Error loading appointments:", error)
+                setAppointments([])
+              }),
 
-          try {
-            userMedications = await api.getMedications(storedUserId)
-          } catch (error) {
-            console.log("No medications found")
-          }
+            api
+              .getHealthData(storedUserId)
+              .then((userHealthData) => {
+                if (userHealthData) setHealthData(userHealthData)
+              })
+              .catch((error) => {
+                console.error("Error loading health data:", error)
+                setHealthData({
+                  bloodPressure: [],
+                  heartRate: [],
+                  weight: [],
+                  sleep: [],
+                })
+              }),
 
-          try {
-            userDocuments = await api.getDocuments(storedUserId)
-          } catch (error) {
-            console.log("No documents found")
-          }
+            api
+              .getMedications(storedUserId)
+              .then((userMedications) => {
+                if (userMedications) setMedications(userMedications)
+              })
+              .catch((error) => {
+                console.error("Error loading medications:", error)
+                setMedications([])
+              }),
 
-          // If API calls succeed, use the data
-          if (userProfile) setProfile(userProfile)
-          if (userSettings) setSettings(userSettings)
-          if (userAppointments) setAppointments(userAppointments)
-          if (userHealthData) setHealthData(userHealthData)
-          if (userMedications) setMedications(userMedications)
-          if (userDocuments) setDocuments(userDocuments)
+            api
+              .getDocuments(storedUserId)
+              .then((userDocuments) => {
+                if (userDocuments) setDocuments(userDocuments)
+              })
+              .catch((error) => {
+                console.error("Error loading documents:", error)
+                setDocuments([])
+              }),
+          ]
+
+          // Wait for all promises to settle (either resolve or reject)
+          const results = await Promise.allSettled(loadDataPromises)
+
+          // Check if profile loading failed (first promise)
+          if (results[0].status === "rejected") {
+            console.error("Critical error loading profile, logging out")
+            logout()
+            return
+          }
         } catch (error) {
           console.error("Error loading user data from API:", error)
-
-          // Fall back to localStorage
-          setUseLocalStorage(true)
-
-          // Load from localStorage
-          setProfile(
-            getFromLocalStorage("health_app_profile", {
-              ...defaultProfile,
-              id: storedUserId,
-              name: "User",
-              email: "user@example.com",
-            }),
-          )
-          setSettings(getFromLocalStorage("health_app_settings", defaultSettings))
-          setAppointments(getFromLocalStorage("health_app_appointments", []))
-          setHealthData(
-            getFromLocalStorage("health_app_health_data", {
-              bloodPressure: [],
-              heartRate: [],
-              weight: [],
-              sleep: [],
-            }),
-          )
-          setMedications(getFromLocalStorage("health_app_medications", []))
-          setDocuments(getFromLocalStorage("health_app_documents", []))
+          logout()
+          return
         }
-      } else {
-        // No user is logged in, use default values
-        setUseLocalStorage(true)
       }
 
       setInitialized(true)
@@ -225,321 +198,414 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (newProfile: UserProfile) => {
     if (!currentUserId) return
 
-    setProfile(newProfile)
-
-    if (useLocalStorage) {
-      saveToLocalStorage("health_app_profile", newProfile)
-      return
-    }
-
     try {
       await api.updateUserProfile({
         ...newProfile,
         id: currentUserId,
       })
+      setProfile(newProfile)
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      })
     } catch (error) {
       console.error("Error updating profile:", error)
-      // Fall back to localStorage
-      setUseLocalStorage(true)
-      saveToLocalStorage("health_app_profile", newProfile)
+      toast({
+        title: "Update Failed",
+        description: "There was a problem updating your profile.",
+        variant: "destructive",
+      })
     }
   }
 
   const updateSettings = async (newSettings: UserSettings) => {
     if (!currentUserId) return
 
-    setSettings(newSettings)
-
-    if (useLocalStorage) {
-      saveToLocalStorage("health_app_settings", newSettings)
-      return
-    }
-
     try {
       await api.updateUserSettings(currentUserId, newSettings)
+      setSettings(newSettings)
+      toast({
+        title: "Settings Updated",
+        description: "Your settings have been saved successfully.",
+      })
     } catch (error) {
       console.error("Error updating settings:", error)
-      // Fall back to localStorage
-      setUseLocalStorage(true)
-      saveToLocalStorage("health_app_settings", newSettings)
+      toast({
+        title: "Update Failed",
+        description: "There was a problem updating your settings.",
+        variant: "destructive",
+      })
     }
   }
 
   const updateAppointments = async (newAppointments: UserAppointment[]) => {
     if (!currentUserId) return
 
-    setAppointments(newAppointments)
-
-    if (useLocalStorage) {
-      saveToLocalStorage("health_app_appointments", newAppointments)
-      return
+    try {
+      await api.updateAppointments(currentUserId, newAppointments)
+      setAppointments(newAppointments)
+      toast({
+        title: "Appointments Updated",
+        description: "Your appointments have been updated successfully.",
+      })
+    } catch (error) {
+      console.error("Error updating appointments:", error)
+      toast({
+        title: "Update Failed",
+        description: "There was a problem updating your appointments.",
+        variant: "destructive",
+      })
     }
-
-    // In a real app, you would sync with the server here
-    // This is simplified for the demo
-    saveToLocalStorage("health_app_appointments", newAppointments)
   }
 
   const updateHealthData = async (newData: UserHealthData) => {
-    if (!currentUserId) return
-
-    setHealthData(newData)
-
-    if (useLocalStorage) {
-      saveToLocalStorage("health_app_health_data", newData)
+    if (!currentUserId) {
+      console.error("Cannot update health data: No user ID")
       return
     }
 
     try {
-      await api.updateHealthData(currentUserId, newData)
+      console.log("Updating health data for user:", currentUserId)
+      console.log("New health data:", newData)
+
+      // Make sure we're passing the userId to the API
+      const result = await api.updateHealthData(currentUserId, newData)
+      console.log("Health data update result:", result)
+
+      // Update the state with the new data
+      setHealthData(newData)
+
+      // Don't show toast here as it's handled in the component
     } catch (error) {
       console.error("Error updating health data:", error)
-      // Fall back to localStorage
-      setUseLocalStorage(true)
-      saveToLocalStorage("health_app_health_data", newData)
+      throw error // Re-throw to allow handling in the component
     }
   }
 
   const updateMedications = async (newMedications: UserMedication[]) => {
     if (!currentUserId) return
 
-    setMedications(newMedications)
-
-    if (useLocalStorage) {
-      saveToLocalStorage("health_app_medications", newMedications)
-      return
+    try {
+      await api.updateMedications(currentUserId, newMedications)
+      setMedications(newMedications)
+      toast({
+        title: "Medications Updated",
+        description: "Your medications have been updated successfully.",
+      })
+    } catch (error) {
+      console.error("Error updating medications:", error)
+      toast({
+        title: "Update Failed",
+        description: "There was a problem updating your medications.",
+        variant: "destructive",
+      })
     }
-
-    // In a real app, you would sync with the server here
-    // This is simplified for the demo
-    saveToLocalStorage("health_app_medications", newMedications)
   }
 
   const updateDocuments = async (newDocuments: UserDocument[]) => {
     if (!currentUserId) return
 
-    setDocuments(newDocuments)
-
-    if (useLocalStorage) {
-      saveToLocalStorage("health_app_documents", newDocuments)
-      return
+    try {
+      await api.updateDocuments(currentUserId, newDocuments)
+      setDocuments(newDocuments)
+      toast({
+        title: "Documents Updated",
+        description: "Your documents have been updated successfully.",
+      })
+    } catch (error) {
+      console.error("Error updating documents:", error)
+      toast({
+        title: "Update Failed",
+        description: "There was a problem updating your documents.",
+        variant: "destructive",
+      })
     }
-
-    // In a real app, you would sync with the server here
-    // This is simplified for the demo
-    saveToLocalStorage("health_app_documents", newDocuments)
   }
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (emailOrUsername: string, password: string): Promise<boolean> => {
     try {
-      if (useLocalStorage) {
-        // Simplified login for localStorage fallback
-        const users = getFromLocalStorage<UserCredentials[]>("health_app_users", [])
-        const user = users.find((u) => u.email === email && u.password === password)
-
-        if (user) {
-          setCurrentUserId(user.id)
-          storeUserId(user.id)
-
-          // Load user data from localStorage
-          setProfile(
-            getFromLocalStorage("health_app_profile", {
-              ...defaultProfile,
-              id: user.id,
-              name: user.username,
-              email: user.email,
-            }),
-          )
-          setSettings(getFromLocalStorage("health_app_settings", defaultSettings))
-          setAppointments(getFromLocalStorage("health_app_appointments", []))
-          setHealthData(
-            getFromLocalStorage("health_app_health_data", {
-              bloodPressure: [],
-              heartRate: [],
-              weight: [],
-              sleep: [],
-            }),
-          )
-          setMedications(getFromLocalStorage("health_app_medications", []))
-          setDocuments(getFromLocalStorage("health_app_documents", []))
-
-          return true
-        }
-
-        return false
-      }
-
       // Try API login
-      try {
-        const response = await api.login(email, password)
+      const response = await api.login(emailOrUsername, password)
 
-        if (response.success) {
-          const userId = response.user.id
-          setCurrentUserId(userId)
-          storeUserId(userId)
+      if (response.success) {
+        const userId = response.user.id
 
-          // Load user data
-          try {
-            let userProfile = null
+        // Update state first
+        setCurrentUserId(userId)
+        storeUserId(userId)
+        setInitialized(true)
 
-            try {
-              userProfile = await api.getProfile(userId)
-            } catch (profileError) {
-              console.log("Profile not found, creating default profile")
-              // Create a default profile if one doesn't exist
-              const defaultUserProfile = {
-                ...defaultProfile,
-                id: userId,
-                name: response.user.username || "User",
-                email: response.user.email,
-              }
+        // Show success toast
+        toast({
+          title: "Login Successful",
+          description: "Welcome back to your health dashboard!",
+        })
 
-              try {
-                userProfile = await api.updateUserProfile(defaultUserProfile)
-              } catch (createProfileError) {
-                console.error("Error creating default profile:", createProfileError)
-                // Fall back to using the default profile in memory
-                userProfile = defaultUserProfile
-              }
-            }
+        // Load user data with better error handling
+        try {
+          // Load data in parallel for faster loading
+          const loadDataPromises = [
+            api
+              .getProfile(userId)
+              .then((userProfile) => {
+                if (userProfile) setProfile(userProfile)
+                else {
+                  // Use a basic profile based on login info
+                  const defaultUserProfile = {
+                    ...defaultProfile,
+                    id: userId,
+                    name: response.user.username || "User",
+                    email: response.user.email,
+                  }
+                  setProfile(defaultUserProfile)
+                }
+              })
+              .catch((error) => {
+                console.error("Error loading profile:", error)
+                // Use a basic profile based on login info
+                const defaultUserProfile = {
+                  ...defaultProfile,
+                  id: userId,
+                  name: response.user.username || "User",
+                  email: response.user.email,
+                }
+                setProfile(defaultUserProfile)
+              }),
 
-            const userSettings = await api.getSettings(userId).catch(() => null)
-            const userAppointments = await api.getAppointments(userId).catch(() => [])
-            const userHealthData = await api.getHealthData(userId).catch(() => null)
-            const userMedications = await api.getMedications(userId).catch(() => [])
-            const userDocuments = await api.getDocuments(userId).catch(() => [])
+            api
+              .getSettings(userId)
+              .then((userSettings) => {
+                if (userSettings) setSettings(userSettings)
+                else setSettings({ ...defaultSettings, userId })
+              })
+              .catch(() => {
+                setSettings({ ...defaultSettings, userId })
+              }),
 
-            if (userProfile) setProfile(userProfile)
-            if (userSettings) setSettings(userSettings)
-            if (userAppointments) setAppointments(userAppointments)
-            if (userHealthData) setHealthData(userHealthData)
-            if (userMedications) setMedications(userMedications)
-            if (userDocuments) setDocuments(userDocuments)
-          } catch (error) {
-            console.error("Error loading user data:", error)
-            setUseLocalStorage(true)
-          }
+            api
+              .getAppointments(userId)
+              .then((userAppointments) => {
+                if (userAppointments) setAppointments(userAppointments)
+                else setAppointments([])
+              })
+              .catch(() => {
+                setAppointments([])
+              }),
 
-          return true
+            api
+              .getHealthData(userId)
+              .then((userHealthData) => {
+                if (userHealthData) setHealthData(userHealthData)
+                else
+                  setHealthData({
+                    bloodPressure: [],
+                    heartRate: [],
+                    weight: [],
+                    sleep: [],
+                  })
+              })
+              .catch(() => {
+                setHealthData({
+                  bloodPressure: [],
+                  heartRate: [],
+                  weight: [],
+                  sleep: [],
+                })
+              }),
+
+            api
+              .getMedications(userId)
+              .then((userMedications) => {
+                if (userMedications) setMedications(userMedications)
+                else setMedications([])
+              })
+              .catch(() => {
+                setMedications([])
+              }),
+
+            api
+              .getDocuments(userId)
+              .then((userDocuments) => {
+                if (userDocuments) setDocuments(userDocuments)
+                else setDocuments([])
+              })
+              .catch(() => {
+                setDocuments([])
+              }),
+          ]
+
+          // Wait for all promises to settle
+          await Promise.allSettled(loadDataPromises)
+        } catch (error) {
+          console.error("Error loading user data:", error)
+          // Even if we can't load all data, the login was successful
+          // We'll just use default values for now
         }
 
-        return false
-      } catch (error) {
-        console.error("Login API error:", error)
-        setUseLocalStorage(true)
-
-        // Try localStorage login as fallback
-        return login(email, password)
+        return true
       }
+
+      toast({
+        title: "Login Failed",
+        description: "Invalid username or password. Please try again.",
+        variant: "destructive",
+      })
+      return false
     } catch (error) {
       console.error("Login error:", error)
+      toast({
+        title: "Login Error",
+        description: "An error occurred during login. Please try again.",
+        variant: "destructive",
+      })
       return false
     }
   }
 
   const signup = async (username: string, email: string, password: string): Promise<boolean> => {
     try {
-      if (useLocalStorage) {
-        // Simplified signup for localStorage fallback
-        const users = getFromLocalStorage<UserCredentials[]>("health_app_users", [])
+      const response = await api.signup(username, email, password)
 
-        // Check if email already exists
-        if (users.some((u) => u.email === email)) {
-          return false
-        }
+      if (response.success) {
+        const userId = response.user.id
 
-        const userId = crypto.randomUUID()
-        const newUser = {
-          id: userId,
-          username,
-          email,
-          password,
-          createdAt: new Date().toISOString(),
-        }
-
-        // Save user
-        saveToLocalStorage("health_app_users", [...users, newUser])
-
-        // Create profile
-        const newProfile = {
-          ...defaultProfile,
-          id: userId,
-          name: username,
-          email,
-        }
-        saveToLocalStorage("health_app_profile", newProfile)
-
-        // Create settings
-        saveToLocalStorage("health_app_settings", {
-          ...defaultSettings,
-          userId,
-        })
-
-        // Auto login
+        // Update state first
         setCurrentUserId(userId)
         storeUserId(userId)
-        setProfile(newProfile)
-        setSettings(defaultSettings)
+        setInitialized(true)
+
+        // Show success toast
+        toast({
+          title: "Account Created",
+          description: "Welcome to your health dashboard! Your account has been created successfully.",
+        })
+
+        // Load user data with better error handling
+        try {
+          // Load data in parallel for faster loading
+          const loadDataPromises = [
+            api
+              .getProfile(userId)
+              .then((userProfile) => {
+                if (userProfile) setProfile(userProfile)
+                else {
+                  // Create a default profile if one doesn't exist
+                  const defaultUserProfile = {
+                    ...defaultProfile,
+                    id: userId,
+                    name: username,
+                    email,
+                  }
+                  setProfile(defaultUserProfile)
+
+                  // Try to save it
+                  api.updateUserProfile(defaultUserProfile).catch((error) => {
+                    console.error("Error creating default profile:", error)
+                  })
+                }
+              })
+              .catch(() => {
+                // Create a default profile if one doesn't exist
+                const defaultUserProfile = {
+                  ...defaultProfile,
+                  id: userId,
+                  name: username,
+                  email,
+                }
+                setProfile(defaultUserProfile)
+
+                // Try to save it
+                api.updateUserProfile(defaultUserProfile).catch((error) => {
+                  console.error("Error creating default profile:", error)
+                })
+              }),
+
+            api
+              .getSettings(userId)
+              .then((userSettings) => {
+                if (userSettings) setSettings(userSettings)
+                else setSettings({ ...defaultSettings, userId })
+              })
+              .catch(() => {
+                setSettings({ ...defaultSettings, userId })
+              }),
+
+            api
+              .getAppointments(userId)
+              .then((userAppointments) => {
+                if (userAppointments) setAppointments(userAppointments)
+                else setAppointments([])
+              })
+              .catch(() => {
+                setAppointments([])
+              }),
+
+            api
+              .getHealthData(userId)
+              .then((userHealthData) => {
+                if (userHealthData) setHealthData(userHealthData)
+                else
+                  setHealthData({
+                    bloodPressure: [],
+                    heartRate: [],
+                    weight: [],
+                    sleep: [],
+                  })
+              })
+              .catch(() => {
+                setHealthData({
+                  bloodPressure: [],
+                  heartRate: [],
+                  weight: [],
+                  sleep: [],
+                })
+              }),
+
+            api
+              .getMedications(userId)
+              .then((userMedications) => {
+                if (userMedications) setMedications(userMedications)
+                else setMedications([])
+              })
+              .catch(() => {
+                setMedications([])
+              }),
+
+            api
+              .getDocuments(userId)
+              .then((userDocuments) => {
+                if (userDocuments) setDocuments(userDocuments)
+                else setDocuments([])
+              })
+              .catch(() => {
+                setDocuments([])
+              }),
+          ]
+
+          // Wait for all promises to settle
+          await Promise.allSettled(loadDataPromises)
+        } catch (error) {
+          console.error("Error loading user data:", error)
+          // Even if we can't load all data, the signup was successful
+          // We'll just use default values for now
+        }
 
         return true
       }
 
-      // Try API signup
-      try {
-        const response = await api.signup(username, email, password)
-
-        if (response.success) {
-          const userId = response.user.id
-          setCurrentUserId(userId)
-          storeUserId(userId)
-
-          // Create a profile for the new user
-          const newProfile = {
-            ...defaultProfile,
-            id: userId,
-            name: username,
-            email,
-          }
-
-          try {
-            await api.updateUserProfile(newProfile)
-          } catch (profileError) {
-            console.error("Error creating profile during signup:", profileError)
-          }
-
-          // Load user data
-          try {
-            const userProfile = await api.getProfile(userId).catch(() => newProfile)
-            const userSettings = await api.getSettings(userId).catch(() => null)
-            const userAppointments = await api.getAppointments(userId).catch(() => [])
-            const userHealthData = await api.getHealthData(userId).catch(() => null)
-            const userMedications = await api.getMedications(userId).catch(() => [])
-            const userDocuments = await api.getDocuments(userId).catch(() => [])
-
-            if (userProfile) setProfile(userProfile)
-            if (userSettings) setSettings(userSettings)
-            if (userAppointments) setAppointments(userAppointments)
-            if (userHealthData) setHealthData(userHealthData)
-            if (userMedications) setMedications(userMedications)
-            if (userDocuments) setDocuments(userDocuments)
-          } catch (error) {
-            console.error("Error loading user data:", error)
-            setUseLocalStorage(true)
-          }
-
-          return true
-        }
-
-        return false
-      } catch (error) {
-        console.error("Signup API error:", error)
-        setUseLocalStorage(true)
-
-        // Try localStorage signup as fallback
-        return signup(username, email, password)
-      }
+      toast({
+        title: "Signup Failed",
+        description: response.message || "Could not create account. Please try again.",
+        variant: "destructive",
+      })
+      return false
     } catch (error) {
       console.error("Signup error:", error)
+      toast({
+        title: "Signup Error",
+        description: "An error occurred during account creation. Please try again.",
+        variant: "destructive",
+      })
       return false
     }
   }
@@ -560,6 +626,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })
     setMedications([])
     setDocuments([])
+
+    toast({
+      title: "Logged Out",
+      description: "You have been successfully logged out.",
+    })
   }
 
   if (loading) {

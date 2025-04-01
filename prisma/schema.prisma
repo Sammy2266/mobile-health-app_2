@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String         @id @default(uuid())
+  email             String         @unique
+  password          String
+  name              String?
+  isVerified        Boolean        @default(false)
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  profile           Profile?
+  healthData        HealthData[]
+  appointments      Appointment[]
+  medications       Medication[]
+  documents         Document[]
+  workouts          Workout[]
+  waterIntake       WaterIntake[]
+}
+
+model Profile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateOfBirth     DateTime?
+  gender          String?
+  height          Float?
+  emergencyContact String?
+  phoneNumber     String?
+  address         String?
+  bloodType       String?
+  allergies       String[]
+  medicalConditions String[]
+  preferredHospital String?
+  preferredPharmacy String?
+  insuranceProvider String?
+  insuranceNumber  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model HealthData {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date          DateTime
+  type          String   // "bloodPressure", "heartRate", "weight", "sleep"
+  systolic      Int?     // For blood pressure
+  diastolic     Int?     // For blood pressure
+  heartRate     Int?     // For heart rate
+  weight        Float?   // For weight
+  sleepHours    Float?   // For sleep
+  sleepQuality  String?  // For sleep: "poor", "fair", "good", "excellent"
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, type, date])
+}
+
+model Appointment {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  doctorName  String
+  location    String
+  type        String   // "checkup", "specialist", "dental", "vision", "other"
+  date        DateTime
+  time        String
+  notes       String?
+  reminder    Boolean  @default(false)
+  reminderSent Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, date])
+}
+
+model Medication {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  dosage          String
+  frequency       String
+  timeOfDay       String[] // "morning", "afternoon", "evening", "bedtime"
+  startDate       DateTime
+  endDate         DateTime?
+  instructions    String?
+  prescribedBy    String?
+  reminder        Boolean  @default(false)
+  reminderSent    Boolean  @default(false)
+  adherenceRecord MedicationAdherence[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, name])
+}
+
+model MedicationAdherence {
+  id           String     @id @default(uuid())
+  medicationId String
+  medication   Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+  date         DateTime
+  taken        Boolean
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([medicationId, date])
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  type        String   // "prescription", "labResult", "insurance", "other"
+  fileUrl     String
+  fileSize    Int
+  uploadDate  DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, type])
+}
+
+model Workout {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // "cardio", "strength", "flexibility", "other"
+  name        String
+  duration    Int      // in minutes
+  caloriesBurned Int?
+  date        DateTime
+  completed   Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, date])
+}
+
+model WaterIntake {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  amount    Int      // in ml
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, date])
+}
+
+model HealthTip {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  category  String   // "nutrition", "fitness", "mental", "sleep", "general"
+  tags      String[]
+  source    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
+

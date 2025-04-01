@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Header } from "@/components/header"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
@@ -27,16 +27,17 @@ import { CalendarIcon, Check, Clock, MapPin, Plus, Trash, User } from "lucide-re
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { ProtectedRoute } from "@/components/protected-route"
+import { getHospitalsWithDoctors } from "@/lib/local-storage-service"
 
 const appointmentFormSchema = z.object({
   title: z.string().min(2, {
     message: "Title must be at least 2 characters.",
   }),
-  doctorName: z.string().min(2, {
-    message: "Doctor name must be at least 2 characters.",
+  hospital: z.string().min(2, {
+    message: "Hospital must be selected.",
   }),
-  location: z.string().min(2, {
-    message: "Location must be at least 2 characters.",
+  doctorName: z.string().min(2, {
+    message: "Doctor name must be selected.",
   }),
   date: z.date({
     required_error: "Please select a date.",
@@ -53,17 +54,39 @@ export default function AppointmentsPage() {
   const { appointments, updateAppointments, initialized } = useApp()
   const { toast } = useToast()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [hospitals, setHospitals] = useState<any[]>([])
+  const [selectedHospital, setSelectedHospital] = useState<string | null>(null)
+  const [availableDoctors, setAvailableDoctors] = useState<string[]>([])
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(appointmentFormSchema),
     defaultValues: {
       title: "",
+      hospital: "",
       doctorName: "",
-      location: "",
       notes: "",
       time: "09:00",
     },
   })
+
+  useEffect(() => {
+    // Get hospitals with doctors
+    const hospitalsData = getHospitalsWithDoctors()
+    setHospitals(hospitalsData)
+  }, [])
+
+  useEffect(() => {
+    // Update available doctors when hospital changes
+    if (selectedHospital) {
+      const hospital = hospitals.find((h) => `${h.name}, ${h.location}` === selectedHospital)
+      if (hospital) {
+        setAvailableDoctors(hospital.doctors)
+        form.setValue("doctorName", "") // Reset doctor selection
+      }
+    } else {
+      setAvailableDoctors([])
+    }
+  }, [selectedHospital, hospitals, form])
 
   if (!initialized) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
@@ -78,12 +101,11 @@ export default function AppointmentsPage() {
       id: crypto.randomUUID(),
       title: data.title,
       doctorName: data.doctorName,
-      location: data.location,
+      location: data.hospital,
       date: appointmentDate.toISOString(),
       notes: data.notes,
       completed: false,
     }
-
     const updatedAppointments = [...appointments, newAppointment]
     updateAppointments(updatedAppointments)
 
@@ -134,30 +156,6 @@ export default function AppointmentsPage() {
     .filter((appointment) => appointment.completed || new Date(appointment.date) <= new Date())
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  // Kenyan hospitals for the dropdown
-  const kenyanHospitals = [
-    "Kenyatta National Hospital, Hospital Road, Nairobi",
-    "Nairobi Hospital, Argwings Kodhek Road, Nairobi",
-    "Aga Khan University Hospital, 3rd Parklands Avenue, Nairobi",
-    "Moi Teaching and Referral Hospital, Nandi Road, Eldoret",
-    "Coast General Hospital, Moi Avenue, Mombasa",
-    "Gertrude's Children's Hospital, Muthaiga Road, Nairobi",
-    "MP Shah Hospital, Shivachi Road, Nairobi",
-    "Karen Hospital, Karen Road, Nairobi",
-  ]
-
-  // Kenyan doctor names for the dropdown
-  const kenyanDoctors = [
-    "Dr. Wanjiku Kamau",
-    "Dr. Omondi Ochieng",
-    "Dr. Njeri Mwangi",
-    "Dr. Kipchoge Kipruto",
-    "Dr. Akinyi Otieno",
-    "Dr. Muthoni Kariuki",
-    "Dr. Otieno Odinga",
-    "Dr. Wambui Gathoni",
-  ]
-
   return (
     <ProtectedRoute>
       <div className="flex min-h-screen flex-col">
@@ -180,22 +178,55 @@ export default function AppointmentsPage() {
                       New Appointment
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px] max-h-[80vh] overflow-y-auto">
+                  <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Schedule Appointment</DialogTitle>
                       <DialogDescription>Enter the details for your new appointment.</DialogDescription>
                     </DialogHeader>
                     <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                         <FormField
                           control={form.control}
                           name="title"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Title</FormLabel>
+                              <FormLabel>Appointment Title</FormLabel>
                               <FormControl>
                                 <Input placeholder="Annual checkup" {...field} />
                               </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="hospital"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Hospital</FormLabel>
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value)
+                                  setSelectedHospital(value)
+                                }}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select a hospital" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {hospitals.map((hospital) => (
+                                    <SelectItem
+                                      key={`${hospital.name}, ${hospital.location}`}
+                                      value={`${hospital.name}, ${hospital.location}`}
+                                    >
+                                      {hospital.name}, {hospital.location}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -209,11 +240,13 @@ export default function AppointmentsPage() {
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select a doctor" />
+                                    <SelectValue
+                                      placeholder={selectedHospital ? "Select a doctor" : "Select a hospital first"}
+                                    />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {kenyanDoctors.map((doctor) => (
+                                  {availableDoctors.map((doctor) => (
                                     <SelectItem key={doctor} value={doctor}>
                                       {doctor}
                                     </SelectItem>
@@ -224,31 +257,7 @@ export default function AppointmentsPage() {
                             </FormItem>
                           )}
                         />
-                        <FormField
-                          control={form.control}
-                          name="location"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Location</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a hospital" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {kenyanHospitals.map((hospital) => (
-                                    <SelectItem key={hospital} value={hospital}>
-                                      {hospital}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <FormField
                             control={form.control}
                             name="date"
@@ -261,39 +270,42 @@ export default function AppointmentsPage() {
                                   onSelect={field.onChange}
                                   disabled={(date) => date < new Date()}
                                   initialFocus
+                                  className="rounded-md border"
                                 />
                                 <FormMessage />
                               </FormItem>
                             )}
                           />
-                          <FormField
-                            control={form.control}
-                            name="time"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Time</FormLabel>
-                                <FormControl>
-                                  <Input type="time" {...field} />
-                                </FormControl>
-                                <FormDescription>24-hour format (HH:MM)</FormDescription>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                          <div className="space-y-6">
+                            <FormField
+                              control={form.control}
+                              name="time"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Time</FormLabel>
+                                  <FormControl>
+                                    <Input type="time" {...field} />
+                                  </FormControl>
+                                  <FormDescription>24-hour format (HH:MM)</FormDescription>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="notes"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Notes</FormLabel>
+                                  <FormControl>
+                                    <Textarea placeholder="Any special instructions or notes" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
                         </div>
-                        <FormField
-                          control={form.control}
-                          name="notes"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Notes</FormLabel>
-                              <FormControl>
-                                <Textarea placeholder="Any special instructions or notes" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
                         <DialogFooter>
                           <Button type="submit">Schedule Appointment</Button>
                         </DialogFooter>

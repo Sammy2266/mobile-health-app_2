@@ -2,164 +2,146 @@
 
 import type React from "react"
 
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { usePathname } from "next/navigation"
 import Link from "next/link"
-// Import the BookOpen icon
-import { BarChart3, Calendar, Clock, FileText, Heart, Home, Settings, User, HelpCircle, BookOpen } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { useApp } from "@/context/app-provider"
+import { cn } from "@/lib/utils"
+import {
+  Activity,
+  Calendar,
+  FileText,
+  Heart,
+  Home,
+  Pill,
+  Settings,
+  User,
+  Droplet,
+  Dumbbell,
+  LogOut,
+  Lightbulb,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { ModeToggle } from "@/components/mode-toggle"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
+  const { isAuthenticated, logout } = useApp()
+
+  const routes = [
+    {
+      label: "Dashboard",
+      icon: Home,
+      href: "/",
+      active: pathname === "/",
+    },
+    {
+      label: "Health Data",
+      icon: Activity,
+      href: "/health-data",
+      active: pathname === "/health-data",
+    },
+    {
+      label: "Appointments",
+      icon: Calendar,
+      href: "/appointments",
+      active: pathname === "/appointments",
+    },
+    {
+      label: "Medications",
+      icon: Pill,
+      href: "/medications",
+      active: pathname === "/medications",
+    },
+    {
+      label: "Documents",
+      icon: FileText,
+      href: "/documents",
+      active: pathname === "/documents",
+    },
+    {
+      label: "Workouts",
+      icon: Dumbbell,
+      href: "/workouts",
+      active: pathname === "/workouts",
+    },
+    {
+      label: "Water Intake",
+      icon: Droplet,
+      href: "/water-intake",
+      active: pathname === "/water-intake",
+    },
+    {
+      label: "Health Tips",
+      icon: Lightbulb,
+      href: "/health-tips",
+      active: pathname === "/health-tips",
+    },
+    {
+      label: "Reports",
+      icon: Heart,
+      href: "/reports",
+      active: pathname === "/reports",
+    },
+    {
+      label: "Profile",
+      icon: User,
+      href: "/profile",
+      active: pathname === "/profile",
+    },
+    {
+      label: "Settings",
+      icon: Settings,
+      href: "/settings",
+      active: pathname === "/settings",
+    },
+  ]
+
+  if (!isAuthenticated) {
+    return null
+  }
 
   return (
-    <div className={cn("pb-12 bg-[#1a2e22] text-white h-full", className)}>
-      <div className="space-y-4 py-4">
-        <div className="px-4">
-          <Button
-            asChild
-            variant={pathname === "/" ? "secondary" : "ghost"}
-            size="sm"
-            className="w-full justify-start text-white hover:text-white hover:bg-[#2a3e32]"
-          >
-            <Link href="/">
-              <Home className="mr-2 h-4 w-4" />
-              Dashboard
+    <div className={cn("flex flex-col h-full bg-background dark:bg-background border-r", className)}>
+      <div className="px-4 py-2 flex items-center justify-between">
+        <Link href="/" className="flex items-center">
+          <img src="/images/logo.png" alt="Health Tracker" className="h-8 w-8 mr-2" />
+          <h1 className="text-xl font-bold text-primary dark:text-white">Health Tracker</h1>
+        </Link>
+        <ModeToggle />
+      </div>
+
+      <ScrollArea className="flex-1 px-3 py-2">
+        <div className="space-y-1">
+          {routes.map((route) => (
+            <Link
+              key={route.href}
+              href={route.href}
+              className={cn(
+                "flex items-center py-2 px-3 text-sm font-medium rounded-md transition-colors",
+                route.active
+                  ? "bg-primary/20 text-primary dark:bg-white/20 dark:text-white"
+                  : "text-foreground hover:bg-muted dark:text-white dark:hover:bg-white/10",
+              )}
+            >
+              <route.icon className="h-5 w-5 mr-3" />
+              {route.label}
             </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/appointments" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/appointments" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/appointments">
-              <Calendar className="mr-2 h-4 w-4" />
-              Appointments
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/health-data" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/health-data" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/health-data">
-              <Heart className="mr-2 h-4 w-4" />
-              Health Data
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/reports" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/reports" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/reports">
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Reports
-            </Link>
-          </Button>
-          {/* Add the Health Tips button after the Reports button */}
-          <Button
-            asChild
-            variant={pathname === "/health-tips" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/health-tips" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/health-tips">
-              <BookOpen className="mr-2 h-4 w-4" />
-              Health Tips
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/medications" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/medications" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/medications">
-              <Clock className="mr-2 h-4 w-4" />
-              Medications
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/documents" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/documents" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/documents">
-              <FileText className="mr-2 h-4 w-4" />
-              Documents
-            </Link>
-          </Button>
+          ))}
         </div>
-        <div className="px-4 pt-4">
-          <h2 className="mb-2 px-2 text-xs font-semibold tracking-tight text-gray-400">ACCOUNT</h2>
-          <Button
-            asChild
-            variant={pathname === "/profile" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/profile" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/profile">
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/settings" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/settings" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/settings">
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant={pathname === "/faq" ? "default" : "ghost"}
-            size="sm"
-            className={cn(
-              "w-full justify-start mt-2 text-white hover:text-white hover:bg-[#2a3e32]",
-              pathname === "/faq" && "bg-health-green-500 hover:bg-health-green-600",
-            )}
-          >
-            <Link href="/faq">
-              <HelpCircle className="mr-2 h-4 w-4" />
-              Help & FAQ
-            </Link>
-          </Button>
-        </div>
+      </ScrollArea>
+
+      <div className="mt-auto px-3 py-4 border-t border-border dark:border-white/10">
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-foreground hover:bg-muted dark:text-white dark:hover:bg-white/10"
+          onClick={logout}
+        >
+          <LogOut className="mr-2 h-5 w-5" />
+          Logout
+        </Button>
       </div>
     </div>
   )

@@ -1,5 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserByEmail, createUser, createProfile, updateSettings, generateRandomData } from "@/lib/db-service"
+import {
+  getUserByEmail,
+  getUserByUsername,
+  createUser,
+  createProfile,
+  updateSettings,
+  generateRandomData,
+} from "@/lib/db-service"
 import { defaultSettings } from "@/types/database"
 
 export async function POST(request: NextRequest) {
@@ -10,10 +17,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Username, email, and password are required" }, { status: 400 })
     }
 
-    // Check if user already exists
-    const existingUser = await getUserByEmail(email)
-    if (existingUser) {
+    // Check if email already exists
+    const existingUserByEmail = await getUserByEmail(email)
+    if (existingUserByEmail) {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 })
+    }
+
+    // Check if username already exists
+    const existingUserByUsername = await getUserByUsername(username)
+    if (existingUserByUsername) {
+      return NextResponse.json({ error: "Username already exists" }, { status: 409 })
     }
 
     // Create new user

@@ -1,9 +1,20 @@
 "use client"
 
-import { Header } from "@/components/header"
-import { Sidebar } from "@/components/sidebar"
+import type React from "react"
+
+import { useState } from "react"
+import { useApp } from "@/context/app-provider"
+import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { BloodPressureChart } from "@/components/charts/blood-pressure-chart"
+import { HeartRateChart } from "@/components/charts/heart-rate-chart"
+import { WeightChart } from "@/components/charts/weight-chart"
+import { SleepChart } from "@/components/charts/sleep-chart"
+import { v4 as uuidv4 } from "uuid"
 import {
   Dialog,
   DialogContent,
@@ -11,655 +22,1102 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useToast } from "@/components/ui/use-toast"
-import { useApp } from "@/context/app-provider"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { Activity, Heart, Plus, Scale, Moon } from "lucide-react"
-import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { z } from "zod"
-// At the top of the file, import ProtectedRoute
-import { ProtectedRoute } from "@/components/protected-route"
-// Update the imports at the top of the file
-import { BloodPressureChart } from "@/components/charts/blood-pressure-chart"
-import { HeartRateChart } from "@/components/charts/heart-rate-chart"
-import { WeightChart } from "@/components/charts/weight-chart"
-import { SleepChart } from "@/components/charts/sleep-chart"
-
-const bloodPressureFormSchema = z.object({
-  systolic: z.coerce.number().min(70).max(220),
-  diastolic: z.coerce.number().min(40).max(120),
-  date: z.date({
-    required_error: "Please select a date.",
-  }),
-})
-
-const heartRateFormSchema = z.object({
-  value: z.coerce.number().min(40).max(220),
-  date: z.date({
-    required_error: "Please select a date.",
-  }),
-})
-
-const weightFormSchema = z.object({
-  value: z.coerce.number().min(20).max(500),
-  date: z.date({
-    required_error: "Please select a date.",
-  }),
-})
-
-const sleepFormSchema = z.object({
-  hours: z.coerce.number().min(0).max(24),
-  quality: z.enum(["poor", "fair", "good", "excellent"]),
-  date: z.date({
-    required_error: "Please select a date.",
-  }),
-})
-
-type BloodPressureFormValues = z.infer<typeof bloodPressureFormSchema>
-type HeartRateFormValues = z.infer<typeof heartRateFormSchema>
-type WeightFormValues = z.infer<typeof weightFormSchema>
-type SleepFormValues = z.infer<typeof sleepFormSchema>
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { format } from "date-fns"
 
 export default function HealthDataPage() {
-  const { healthData, updateHealthData, initialized } = useApp()
+  const { healthData, updateHealthData } = useApp()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("blood-pressure")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
 
-  const bloodPressureForm = useForm<BloodPressureFormValues>({
-    resolver: zodResolver(bloodPressureFormSchema),
-    defaultValues: {
-      systolic: 120,
-      diastolic: 80,
-      date: new Date(),
-    },
-  })
+  // Get current date in YYYY-MM-DD format for date inputs
+  const today = new Date().toISOString().split("T")[0]
 
-  const heartRateForm = useForm<HeartRateFormValues>({
-    resolver: zodResolver(heartRateFormSchema),
-    defaultValues: {
-      value: 70,
-      date: new Date(),
-    },
-  })
+  // Form states
+  const [systolic, setSystolic] = useState("")
+  const [diastolic, setDiastolic] = useState("")
+  const [bpDate, setBpDate] = useState(today)
 
-  const weightForm = useForm<WeightFormValues>({
-    resolver: zodResolver(weightFormSchema),
-    defaultValues: {
-      value: 70,
-      date: new Date(),
-    },
-  })
+  const [heartRate, setHeartRate] = useState("")
+  const [hrDate, setHrDate] = useState(today)
 
-  const sleepForm = useForm<SleepFormValues>({
-    resolver: zodResolver(sleepFormSchema),
-    defaultValues: {
-      hours: 8,
-      quality: "good",
-      date: new Date(),
-    },
-  })
+  const [weight, setWeight] = useState("")
+  const [weightDate, setWeightDate] = useState(today)
 
-  if (!initialized) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
-  }
+  const [sleepHours, setSleepHours] = useState("")
+  const [sleepDate, setSleepDate] = useState(today)
 
-  const onSubmitBloodPressure = (data: BloodPressureFormValues) => {
-    const newData = {
-      ...healthData,
-      bloodPressure: [
-        ...healthData.bloodPressure,
-        {
-          date: data.date.toISOString(),
-          systolic: data.systolic,
-          diastolic: data.diastolic,
-        },
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+  // Edit states
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editType, setEditType] = useState("")
+  const [editIndex, setEditIndex] = useState(-1)
+  const [editData, setEditData] = useState<any>({})
+
+  // Add sleep quality state
+  const [sleepQuality, setSleepQuality] = useState<"poor" | "fair" | "good" | "excellent">("good")
+
+  const handleBloodPressureSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!systolic || !diastolic || !bpDate) {
+      toast({
+        title: "Missing values",
+        description: "Please enter both systolic and diastolic values, and select a date.",
+        variant: "destructive",
+      })
+      return
     }
 
-    updateHealthData(newData)
+    const systolicValue = Number.parseInt(systolic)
+    const diastolicValue = Number.parseInt(diastolic)
 
-    toast({
-      title: "Blood Pressure Added",
-      description: "Your blood pressure reading has been saved.",
-    })
-
-    bloodPressureForm.reset()
-    setIsDialogOpen(false)
-  }
-
-  const onSubmitHeartRate = (data: HeartRateFormValues) => {
-    const newData = {
-      ...healthData,
-      heartRate: [
-        ...healthData.heartRate,
-        {
-          date: data.date.toISOString(),
-          value: data.value,
-        },
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    if (isNaN(systolicValue) || isNaN(diastolicValue)) {
+      toast({
+        title: "Invalid values",
+        description: "Please enter valid numbers for blood pressure.",
+        variant: "destructive",
+      })
+      return
     }
 
-    updateHealthData(newData)
+    // Create date with time set to noon to avoid timezone issues
+    const selectedDate = new Date(bpDate)
+    selectedDate.setHours(12, 0, 0, 0)
+    const dateString = selectedDate.toISOString()
 
-    toast({
-      title: "Heart Rate Added",
-      description: "Your heart rate reading has been saved.",
+    // Check for duplicate entries
+    const isDuplicate = healthData.bloodPressure.some((bp) => {
+      const bpDate = new Date(bp.date)
+      bpDate.setHours(0, 0, 0, 0)
+      const selectedDateMidnight = new Date(selectedDate)
+      selectedDateMidnight.setHours(0, 0, 0, 0)
+
+      return (
+        bp.systolic === systolicValue &&
+        bp.diastolic === diastolicValue &&
+        bpDate.getTime() === selectedDateMidnight.getTime()
+      )
     })
 
-    heartRateForm.reset()
-    setIsDialogOpen(false)
-  }
-
-  const onSubmitWeight = (data: WeightFormValues) => {
-    const newData = {
-      ...healthData,
-      weight: [
-        ...healthData.weight,
-        {
-          date: data.date.toISOString(),
-          value: data.value,
-        },
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    if (isDuplicate) {
+      toast({
+        title: "Duplicate entry",
+        description: "This blood pressure reading already exists for the selected date.",
+        variant: "destructive",
+      })
+      return
     }
 
-    updateHealthData(newData)
+    const newBloodPressure = [
+      ...healthData.bloodPressure,
+      {
+        id: uuidv4(),
+        date: dateString,
+        systolic: systolicValue,
+        diastolic: diastolicValue,
+      },
+    ]
 
-    toast({
-      title: "Weight Added",
-      description: "Your weight reading has been saved.",
+    updateHealthData({
+      ...healthData,
+      bloodPressure: newBloodPressure,
     })
-
-    weightForm.reset()
-    setIsDialogOpen(false)
+      .then(() => {
+        toast({
+          title: "Blood pressure added",
+          description: "Your blood pressure reading has been saved.",
+        })
+        setSystolic("")
+        setDiastolic("")
+        // Keep the date as is for convenience
+      })
+      .catch((error) => {
+        console.error("Error saving blood pressure:", error)
+        toast({
+          title: "Error",
+          description: "Failed to save blood pressure reading. Please try again.",
+          variant: "destructive",
+        })
+      })
   }
 
-  const onSubmitSleep = (data: SleepFormValues) => {
-    const newData = {
-      ...healthData,
-      sleep: [
-        ...healthData.sleep,
-        {
-          date: data.date.toISOString(),
-          hours: data.hours,
-          quality: data.quality,
-        },
-      ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+  const handleHeartRateSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!heartRate || !hrDate) {
+      toast({
+        title: "Missing values",
+        description: "Please enter a heart rate value and select a date.",
+        variant: "destructive",
+      })
+      return
     }
 
-    updateHealthData(newData)
+    const heartRateValue = Number.parseInt(heartRate)
 
-    toast({
-      title: "Sleep Data Added",
-      description: "Your sleep data has been saved.",
+    if (isNaN(heartRateValue)) {
+      toast({
+        title: "Invalid value",
+        description: "Please enter a valid number for heart rate.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Create date with time set to noon to avoid timezone issues
+    const selectedDate = new Date(hrDate)
+    selectedDate.setHours(12, 0, 0, 0)
+    const dateString = selectedDate.toISOString()
+
+    // Check for duplicate entries
+    const isDuplicate = healthData.heartRate.some((hr) => {
+      const hrDate = new Date(hr.date)
+      hrDate.setHours(0, 0, 0, 0)
+      const selectedDateMidnight = new Date(selectedDate)
+      selectedDateMidnight.setHours(0, 0, 0, 0)
+
+      return hr.value === heartRateValue && hrDate.getTime() === selectedDateMidnight.getTime()
     })
 
-    sleepForm.reset()
-    setIsDialogOpen(false)
+    if (isDuplicate) {
+      toast({
+        title: "Duplicate entry",
+        description: "This heart rate reading already exists for the selected date.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const newHeartRate = [
+      ...healthData.heartRate,
+      {
+        id: uuidv4(),
+        date: dateString,
+        value: heartRateValue,
+      },
+    ]
+
+    updateHealthData({
+      ...healthData,
+      heartRate: newHeartRate,
+    })
+      .then(() => {
+        toast({
+          title: "Heart rate added",
+          description: "Your heart rate reading has been saved.",
+        })
+        setHeartRate("")
+        // Keep the date as is for convenience
+      })
+      .catch((error) => {
+        console.error("Error saving heart rate:", error)
+        toast({
+          title: "Error",
+          description: "Failed to save heart rate reading. Please try again.",
+          variant: "destructive",
+        })
+      })
   }
 
-  const getLatestBloodPressure = () => {
-    if (healthData.bloodPressure.length === 0) return null
-    return healthData.bloodPressure[healthData.bloodPressure.length - 1]
+  const handleWeightSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!weight || !weightDate) {
+      toast({
+        title: "Missing values",
+        description: "Please enter a weight value and select a date.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const weightValue = Number.parseFloat(weight)
+
+    if (isNaN(weightValue)) {
+      toast({
+        title: "Invalid value",
+        description: "Please enter a valid number for weight.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Create date with time set to noon to avoid timezone issues
+    const selectedDate = new Date(weightDate)
+    selectedDate.setHours(12, 0, 0, 0)
+    const dateString = selectedDate.toISOString()
+
+    // Check for duplicate entries
+    const isDuplicate = healthData.weight.some((w) => {
+      const wDate = new Date(w.date)
+      wDate.setHours(0, 0, 0, 0)
+      const selectedDateMidnight = new Date(selectedDate)
+      selectedDateMidnight.setHours(0, 0, 0, 0)
+
+      return w.value === weightValue && wDate.getTime() === selectedDateMidnight.getTime()
+    })
+
+    if (isDuplicate) {
+      toast({
+        title: "Duplicate entry",
+        description: "This weight reading already exists for the selected date.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const newWeight = [
+      ...healthData.weight,
+      {
+        id: uuidv4(),
+        date: dateString,
+        value: weightValue,
+      },
+    ]
+
+    updateHealthData({
+      ...healthData,
+      weight: newWeight,
+    })
+      .then(() => {
+        toast({
+          title: "Weight added",
+          description: "Your weight reading has been saved.",
+        })
+        setWeight("")
+        // Keep the date as is for convenience
+      })
+      .catch((error) => {
+        console.error("Error saving weight:", error)
+        toast({
+          title: "Error",
+          description: "Failed to save weight reading. Please try again.",
+          variant: "destructive",
+        })
+      })
   }
 
-  const getLatestHeartRate = () => {
-    if (healthData.heartRate.length === 0) return null
-    return healthData.heartRate[healthData.heartRate.length - 1]
+  // Update the handleSleepSubmit function to include sleep quality
+  const handleSleepSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!sleepHours || !sleepDate) {
+      toast({
+        title: "Missing values",
+        description: "Please enter sleep hours and select a date.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const sleepValue = Number.parseFloat(sleepHours)
+
+    if (isNaN(sleepValue)) {
+      toast({
+        title: "Invalid value",
+        description: "Please enter a valid number for sleep hours.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Create date with time set to noon to avoid timezone issues
+    const selectedDate = new Date(sleepDate)
+    selectedDate.setHours(12, 0, 0, 0)
+    const dateString = selectedDate.toISOString()
+
+    // Check for duplicate entries
+    const isDuplicate = healthData.sleep.some((s) => {
+      const sDate = new Date(s.date)
+      sDate.setHours(0, 0, 0, 0)
+      const selectedDateMidnight = new Date(selectedDate)
+      selectedDateMidnight.setHours(0, 0, 0, 0)
+
+      return s.hours === sleepValue && sDate.getTime() === selectedDateMidnight.getTime()
+    })
+
+    if (isDuplicate) {
+      toast({
+        title: "Duplicate entry",
+        description: "This sleep reading already exists for the selected date.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const newSleep = [
+      ...healthData.sleep,
+      {
+        id: uuidv4(),
+        date: dateString,
+        hours: sleepValue,
+        quality: sleepQuality,
+      },
+    ]
+
+    updateHealthData({
+      ...healthData,
+      sleep: newSleep,
+    })
+      .then(() => {
+        toast({
+          title: "Sleep added",
+          description: "Your sleep hours have been saved.",
+        })
+        setSleepHours("")
+        // Keep the date and quality as is for convenience
+      })
+      .catch((error) => {
+        console.error("Error saving sleep hours:", error)
+        toast({
+          title: "Error",
+          description: "Failed to save sleep hours. Please try again.",
+          variant: "destructive",
+        })
+      })
   }
 
-  const getLatestWeight = () => {
-    if (healthData.weight.length === 0) return null
-    return healthData.weight[healthData.weight.length - 1]
+  // Open edit dialog for a specific reading
+  // Update the openEditDialog function for sleep to include quality
+  const openEditDialog = (type: string, index: number) => {
+    setEditType(type)
+    setEditIndex(index)
+
+    let dataToEdit = {}
+
+    switch (type) {
+      case "blood-pressure":
+        const bpDate = new Date(healthData.bloodPressure[index].date)
+        dataToEdit = {
+          systolic: healthData.bloodPressure[index].systolic.toString(),
+          diastolic: healthData.bloodPressure[index].diastolic.toString(),
+          date: bpDate.toISOString().split("T")[0],
+        }
+        break
+      case "heart-rate":
+        const hrDate = new Date(healthData.heartRate[index].date)
+        dataToEdit = {
+          value: healthData.heartRate[index].value.toString(),
+          date: hrDate.toISOString().split("T")[0],
+        }
+        break
+      case "weight":
+        const weightDate = new Date(healthData.weight[index].date)
+        dataToEdit = {
+          value: healthData.weight[index].value.toString(),
+          date: weightDate.toISOString().split("T")[0],
+        }
+        break
+      case "sleep":
+        const sleepDate = new Date(healthData.sleep[index].date)
+        dataToEdit = {
+          hours: healthData.sleep[index].hours.toString(),
+          date: sleepDate.toISOString().split("T")[0],
+          quality: healthData.sleep[index].quality || "good",
+        }
+        break
+    }
+
+    setEditData(dataToEdit)
+    setEditDialogOpen(true)
   }
 
-  const getLatestSleep = () => {
-    if (healthData.sleep.length === 0) return null
-    return healthData.sleep[healthData.sleep.length - 1]
+  // Handle edit form input changes
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditData({
+      ...editData,
+      [e.target.name]: e.target.value,
+    })
   }
 
-  const latestBloodPressure = getLatestBloodPressure()
-  const latestHeartRate = getLatestHeartRate()
-  const latestWeight = getLatestWeight()
-  const latestSleep = getLatestSleep()
+  // Save edited reading
+  // Update the saveEditedReading function for sleep to include quality
+  const saveEditedReading = () => {
+    if (editIndex === -1) return
 
-  // Wrap the return statement with ProtectedRoute
+    const updatedHealthData = { ...healthData }
+
+    // Create date with time set to noon to avoid timezone issues
+    const selectedDate = new Date(editData.date)
+    selectedDate.setHours(12, 0, 0, 0)
+    const dateString = selectedDate.toISOString()
+
+    switch (editType) {
+      case "blood-pressure":
+        const systolicValue = Number.parseInt(editData.systolic)
+        const diastolicValue = Number.parseInt(editData.diastolic)
+
+        if (isNaN(systolicValue) || isNaN(diastolicValue)) {
+          toast({
+            title: "Invalid values",
+            description: "Please enter valid numbers for blood pressure.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        updatedHealthData.bloodPressure[editIndex] = {
+          ...updatedHealthData.bloodPressure[editIndex],
+          systolic: systolicValue,
+          diastolic: diastolicValue,
+          date: dateString,
+        }
+        break
+
+      case "heart-rate":
+        const heartRateValue = Number.parseInt(editData.value)
+
+        if (isNaN(heartRateValue)) {
+          toast({
+            title: "Invalid value",
+            description: "Please enter a valid number for heart rate.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        updatedHealthData.heartRate[editIndex] = {
+          ...updatedHealthData.heartRate[editIndex],
+          value: heartRateValue,
+          date: dateString,
+        }
+        break
+
+      case "weight":
+        const weightValue = Number.parseFloat(editData.value)
+
+        if (isNaN(weightValue)) {
+          toast({
+            title: "Invalid value",
+            description: "Please enter a valid number for weight.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        updatedHealthData.weight[editIndex] = {
+          ...updatedHealthData.weight[editIndex],
+          value: weightValue,
+          date: dateString,
+        }
+        break
+
+      case "sleep":
+        const sleepValue = Number.parseFloat(editData.hours)
+
+        if (isNaN(sleepValue)) {
+          toast({
+            title: "Invalid value",
+            description: "Please enter a valid number for sleep hours.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        updatedHealthData.sleep[editIndex] = {
+          ...updatedHealthData.sleep[editIndex],
+          hours: sleepValue,
+          date: dateString,
+          quality: editData.quality,
+        }
+        break
+    }
+
+    updateHealthData(updatedHealthData)
+      .then(() => {
+        toast({
+          title: "Reading updated",
+          description: "Your health reading has been updated successfully.",
+        })
+        setEditDialogOpen(false)
+      })
+      .catch((error) => {
+        console.error("Error updating reading:", error)
+        toast({
+          title: "Error",
+          description: "Failed to update reading. Please try again.",
+          variant: "destructive",
+        })
+      })
+  }
+
+  // Delete a reading
+  const deleteReading = (type: string, index: number) => {
+    const updatedHealthData = { ...healthData }
+
+    switch (type) {
+      case "blood-pressure":
+        updatedHealthData.bloodPressure = updatedHealthData.bloodPressure.filter((_, i) => i !== index)
+        break
+      case "heart-rate":
+        updatedHealthData.heartRate = updatedHealthData.heartRate.filter((_, i) => i !== index)
+        break
+      case "weight":
+        updatedHealthData.weight = updatedHealthData.weight.filter((_, i) => i !== index)
+        break
+      case "sleep":
+        updatedHealthData.sleep = updatedHealthData.sleep.filter((_, i) => i !== index)
+        break
+    }
+
+    updateHealthData(updatedHealthData)
+      .then(() => {
+        toast({
+          title: "Reading deleted",
+          description: "Your health reading has been deleted successfully.",
+        })
+      })
+      .catch((error) => {
+        console.error("Error deleting reading:", error)
+        toast({
+          title: "Error",
+          description: "Failed to delete reading. Please try again.",
+        })
+      })
+  }
+
   return (
-    <ProtectedRoute>
-      <div className="flex min-h-screen flex-col">
-        <Header />
-        <div className="flex flex-1">
-          <aside className="hidden w-64 border-r bg-[#1a2e22] md:block">
-            <Sidebar />
-          </aside>
-          <main className="flex-1 p-4 md:p-6">
-            <div className="flex flex-col gap-4 md:gap-8">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col gap-2">
-                  <h1 className="text-3xl font-bold tracking-tight">Health Data</h1>
-                  <p className="text-muted-foreground">Track and monitor your health metrics</p>
+    <div className="container mx-auto py-6">
+      <h1 className="text-3xl font-bold mb-6">Health Data</h1>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-4 mb-6">
+          <TabsTrigger value="blood-pressure">Blood Pressure</TabsTrigger>
+          <TabsTrigger value="heart-rate">Heart Rate</TabsTrigger>
+          <TabsTrigger value="weight">Weight</TabsTrigger>
+          <TabsTrigger value="sleep">Sleep</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="blood-pressure">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Blood Pressure Reading</CardTitle>
+                <CardDescription>Enter your systolic and diastolic blood pressure values.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleBloodPressureSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bp-date">Date</Label>
+                    <Input
+                      id="bp-date"
+                      type="date"
+                      value={bpDate}
+                      onChange={(e) => setBpDate(e.target.value)}
+                      max={today}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="systolic">Systolic (mmHg)</Label>
+                      <Input
+                        id="systolic"
+                        type="number"
+                        placeholder="120"
+                        value={systolic}
+                        onChange={(e) => setSystolic(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="diastolic">Diastolic (mmHg)</Label>
+                      <Input
+                        id="diastolic"
+                        type="number"
+                        placeholder="80"
+                        value={diastolic}
+                        onChange={(e) => setDiastolic(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full">
+                    Save Reading
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Blood Pressure History</CardTitle>
+                <CardDescription>Your recent blood pressure readings.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <BloodPressureChart data={healthData.bloodPressure} />
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Reading
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle>Add Health Data</DialogTitle>
-                      <DialogDescription>Enter your health metrics to track your progress.</DialogDescription>
-                    </DialogHeader>
-                    <Tabs defaultValue="blood-pressure" value={activeTab} onValueChange={setActiveTab}>
-                      <TabsList className="grid grid-cols-4 mb-4">
-                        <TabsTrigger value="blood-pressure">BP</TabsTrigger>
-                        <TabsTrigger value="heart-rate">HR</TabsTrigger>
-                        <TabsTrigger value="weight">Weight</TabsTrigger>
-                        <TabsTrigger value="sleep">Sleep</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="blood-pressure">
-                        <Form {...bloodPressureForm}>
-                          <form onSubmit={bloodPressureForm.handleSubmit(onSubmitBloodPressure)} className="space-y-4">
-                            <FormField
-                              control={bloodPressureForm.control}
-                              name="systolic"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Systolic (mmHg)</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={bloodPressureForm.control}
-                              name="diastolic"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Diastolic (mmHg)</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={bloodPressureForm.control}
-                              name="date"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Date</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="date"
-                                      value={field.value ? new Date(field.value).toISOString().split("T")[0] : ""}
-                                      onChange={(e) => field.onChange(new Date(e.target.value))}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <DialogFooter>
-                              <Button type="submit">Save</Button>
-                            </DialogFooter>
-                          </form>
-                        </Form>
-                      </TabsContent>
-                      <TabsContent value="heart-rate">
-                        <Form {...heartRateForm}>
-                          <form onSubmit={heartRateForm.handleSubmit(onSubmitHeartRate)} className="space-y-4">
-                            <FormField
-                              control={heartRateForm.control}
-                              name="value"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Heart Rate (BPM)</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={heartRateForm.control}
-                              name="date"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Date</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="date"
-                                      value={field.value ? new Date(field.value).toISOString().split("T")[0] : ""}
-                                      onChange={(e) => field.onChange(new Date(e.target.value))}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <DialogFooter>
-                              <Button type="submit">Save</Button>
-                            </DialogFooter>
-                          </form>
-                        </Form>
-                      </TabsContent>
-                      <TabsContent value="weight">
-                        <Form {...weightForm}>
-                          <form onSubmit={weightForm.handleSubmit(onSubmitWeight)} className="space-y-4">
-                            <FormField
-                              control={weightForm.control}
-                              name="value"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Weight (kg)</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" step="0.1" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={weightForm.control}
-                              name="date"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Date</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="date"
-                                      value={field.value ? new Date(field.value).toISOString().split("T")[0] : ""}
-                                      onChange={(e) => field.onChange(new Date(e.target.value))}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <DialogFooter>
-                              <Button type="submit">Save</Button>
-                            </DialogFooter>
-                          </form>
-                        </Form>
-                      </TabsContent>
-                      <TabsContent value="sleep">
-                        <Form {...sleepForm}>
-                          <form onSubmit={sleepForm.handleSubmit(onSubmitSleep)} className="space-y-4">
-                            <FormField
-                              control={sleepForm.control}
-                              name="hours"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Sleep Duration (hours)</FormLabel>
-                                  <FormControl>
-                                    <Input type="number" step="0.1" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={sleepForm.control}
-                              name="quality"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Sleep Quality</FormLabel>
-                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                      <SelectTrigger>
-                                        <SelectValue placeholder="Select sleep quality" />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      <SelectItem value="poor">Poor</SelectItem>
-                                      <SelectItem value="fair">Fair</SelectItem>
-                                      <SelectItem value="good">Good</SelectItem>
-                                      <SelectItem value="excellent">Excellent</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={sleepForm.control}
-                              name="date"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Date</FormLabel>
-                                  <FormControl>
-                                    <Input
-                                      type="date"
-                                      value={field.value ? new Date(field.value).toISOString().split("T")[0] : ""}
-                                      onChange={(e) => field.onChange(new Date(e.target.value))}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <DialogFooter>
-                              <Button type="submit">Save</Button>
-                            </DialogFooter>
-                          </form>
-                        </Form>
-                      </TabsContent>
-                    </Tabs>
-                  </DialogContent>
-                </Dialog>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Blood Pressure</CardTitle>
-                    <Activity className="h-4 w-4 text-health-green-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {latestBloodPressure
-                        ? `${latestBloodPressure.systolic}/${latestBloodPressure.diastolic}`
-                        : "No data"}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {latestBloodPressure
-                        ? `Last updated: ${new Date(latestBloodPressure.date).toLocaleDateString()}`
-                        : ""}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Heart Rate</CardTitle>
-                    <Heart className="h-4 w-4 text-health-green-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {latestHeartRate ? `${latestHeartRate.value} BPM` : "No data"}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {latestHeartRate ? `Last updated: ${new Date(latestHeartRate.date).toLocaleDateString()}` : ""}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Weight</CardTitle>
-                    <Scale className="h-4 w-4 text-health-green-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{latestWeight ? `${latestWeight.value} kg` : "No data"}</div>
-                    <p className="text-xs text-muted-foreground">
-                      {latestWeight ? `Last updated: ${new Date(latestWeight.date).toLocaleDateString()}` : ""}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Sleep</CardTitle>
-                    <Moon className="h-4 w-4 text-health-green-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{latestSleep ? `${latestSleep.hours} hrs` : "No data"}</div>
-                    <p className="text-xs text-muted-foreground">
-                      {latestSleep
-                        ? `Quality: ${latestSleep.quality.charAt(0).toUpperCase() + latestSleep.quality.slice(1)}`
-                        : ""}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Tabs defaultValue="blood-pressure">
-                <TabsList className="grid w-full grid-cols-4">
-                  <TabsTrigger value="blood-pressure">Blood Pressure</TabsTrigger>
-                  <TabsTrigger value="heart-rate">Heart Rate</TabsTrigger>
-                  <TabsTrigger value="weight">Weight</TabsTrigger>
-                  <TabsTrigger value="sleep">Sleep</TabsTrigger>
-                </TabsList>
-                {/* Replace the placeholder chart divs with actual charts */}
-                {/* For example, in the Blood Pressure tab content: */}
-                <TabsContent value="blood-pressure">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Blood Pressure History</CardTitle>
-                      <CardDescription>Your blood pressure readings over time</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                <div className="mt-4 max-h-[200px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Systolic</TableHead>
+                        <TableHead>Diastolic</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {healthData.bloodPressure.length > 0 ? (
-                        <div className="space-y-8">
-                          <BloodPressureChart data={healthData.bloodPressure} height={200} />
-                          <div className="space-y-2">
-                            {healthData.bloodPressure
-                              .slice()
-                              .reverse()
-                              .map((reading, index) => (
-                                <div key={index} className="flex justify-between items-center p-2 border-b">
-                                  <div className="font-medium">{new Date(reading.date).toLocaleDateString()}</div>
-                                  <div className="text-health-green-500">
-                                    {reading.systolic}/{reading.diastolic} mmHg
-                                  </div>
+                        [...healthData.bloodPressure]
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .map((bp, index) => (
+                            <TableRow key={bp.id || index}>
+                              <TableCell>{format(new Date(bp.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>{bp.systolic}</TableCell>
+                              <TableCell>{bp.diastolic}</TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEditDialog("blood-pressure", index)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => deleteReading("blood-pressure", index)}
+                                  >
+                                    Delete
+                                  </Button>
                                 </div>
-                              ))}
-                          </div>
-                        </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground">No blood pressure data available</div>
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center">
+                            No readings yet
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                <TabsContent value="heart-rate">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Heart Rate History</CardTitle>
-                      <CardDescription>Your heart rate readings over time</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="heart-rate">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Heart Rate Reading</CardTitle>
+                <CardDescription>Enter your heart rate in beats per minute (BPM).</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleHeartRateSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="hr-date">Date</Label>
+                    <Input
+                      id="hr-date"
+                      type="date"
+                      value={hrDate}
+                      onChange={(e) => setHrDate(e.target.value)}
+                      max={today}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="heart-rate">Heart Rate (BPM)</Label>
+                    <Input
+                      id="heart-rate"
+                      type="number"
+                      placeholder="75"
+                      value={heartRate}
+                      onChange={(e) => setHeartRate(e.target.value)}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full">
+                    Save Reading
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Heart Rate History</CardTitle>
+                <CardDescription>Your recent heart rate readings.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <HeartRateChart data={healthData.heartRate} />
+                </div>
+
+                <div className="mt-4 max-h-[200px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>BPM</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {healthData.heartRate.length > 0 ? (
-                        <div className="space-y-8">
-                          <HeartRateChart data={healthData.heartRate} height={200} />
-                          <div className="space-y-2">
-                            {healthData.heartRate
-                              .slice()
-                              .reverse()
-                              .map((reading, index) => (
-                                <div key={index} className="flex justify-between items-center p-2 border-b">
-                                  <div className="font-medium">{new Date(reading.date).toLocaleDateString()}</div>
-                                  <div className="text-health-green-500">{reading.value} BPM</div>
+                        [...healthData.heartRate]
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .map((hr, index) => (
+                            <TableRow key={hr.id || index}>
+                              <TableCell>{format(new Date(hr.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>{hr.value}</TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openEditDialog("heart-rate", index)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => deleteReading("heart-rate", index)}
+                                  >
+                                    Delete
+                                  </Button>
                                 </div>
-                              ))}
-                          </div>
-                        </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground">No heart rate data available</div>
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center">
+                            No readings yet
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                <TabsContent value="weight">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Weight History</CardTitle>
-                      <CardDescription>Your weight readings over time</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="weight">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Weight Reading</CardTitle>
+                <CardDescription>Enter your weight in kilograms (kg).</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleWeightSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="weight-date">Date</Label>
+                    <Input
+                      id="weight-date"
+                      type="date"
+                      value={weightDate}
+                      onChange={(e) => setWeightDate(e.target.value)}
+                      max={today}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="weight">Weight (kg)</Label>
+                    <Input
+                      id="weight"
+                      type="number"
+                      step="0.1"
+                      placeholder="70.5"
+                      value={weight}
+                      onChange={(e) => setWeight(e.target.value)}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full">
+                    Save Reading
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Weight History</CardTitle>
+                <CardDescription>Your recent weight readings.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <WeightChart data={healthData.weight} />
+                </div>
+
+                <div className="mt-4 max-h-[200px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Weight (kg)</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {healthData.weight.length > 0 ? (
-                        <div className="space-y-8">
-                          <WeightChart data={healthData.weight} height={200} />
-                          <div className="space-y-2">
-                            {healthData.weight
-                              .slice()
-                              .reverse()
-                              .map((reading, index) => (
-                                <div key={index} className="flex justify-between items-center p-2 border-b">
-                                  <div className="font-medium">{new Date(reading.date).toLocaleDateString()}</div>
-                                  <div className="text-health-green-500">{reading.value} kg</div>
+                        [...healthData.weight]
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .map((w, index) => (
+                            <TableRow key={w.id || index}>
+                              <TableCell>{format(new Date(w.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>{w.value}</TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm" onClick={() => openEditDialog("weight", index)}>
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => deleteReading("weight", index)}
+                                  >
+                                    Delete
+                                  </Button>
                                 </div>
-                              ))}
-                          </div>
-                        </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground">No weight data available</div>
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center">
+                            No readings yet
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                <TabsContent value="sleep">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Sleep History</CardTitle>
-                      <CardDescription>Your sleep patterns over time</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Update the sleep form to include quality dropdown */}
+        {/* Replace the sleep form section with this updated version */}
+        <TabsContent value="sleep">
+          <div className="grid gap-6 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Add Sleep Reading</CardTitle>
+                <CardDescription>Enter your sleep duration in hours and quality.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSleepSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sleep-date">Date</Label>
+                    <Input
+                      id="sleep-date"
+                      type="date"
+                      value={sleepDate}
+                      onChange={(e) => setSleepDate(e.target.value)}
+                      max={today}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sleep">Sleep (hours)</Label>
+                    <Input
+                      id="sleep"
+                      type="number"
+                      step="0.5"
+                      placeholder="8"
+                      value={sleepHours}
+                      onChange={(e) => setSleepHours(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sleep-quality">Sleep Quality</Label>
+                    <select
+                      id="sleep-quality"
+                      className="w-full rounded-md border border-input bg-background px-3 py-2"
+                      value={sleepQuality}
+                      onChange={(e) => setSleepQuality(e.target.value as "poor" | "fair" | "good" | "excellent")}
+                    >
+                      <option value="poor">Poor</option>
+                      <option value="fair">Fair</option>
+                      <option value="good">Good</option>
+                      <option value="excellent">Excellent</option>
+                    </select>
+                  </div>
+                  <Button type="submit" className="w-full">
+                    Save Reading
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Sleep History</CardTitle>
+                <CardDescription>Your recent sleep durations.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <SleepChart data={healthData.sleep} />
+                </div>
+
+                <div className="mt-4 max-h-[200px] overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Hours</TableHead>
+                        <TableHead>Quality</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {healthData.sleep.length > 0 ? (
-                        <div className="space-y-8">
-                          <SleepChart data={healthData.sleep} height={200} />
-                          <div className="space-y-2">
-                            {healthData.sleep
-                              .slice()
-                              .reverse()
-                              .map((reading, index) => (
-                                <div key={index} className="flex justify-between items-center p-2 border-b">
-                                  <div className="font-medium">{new Date(reading.date).toLocaleDateString()}</div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-health-green-500">{reading.hours} hrs</span>
-                                    <span className="text-xs bg-muted px-2 py-1 rounded-full">
-                                      {reading.quality.charAt(0).toUpperCase() + reading.quality.slice(1)}
-                                    </span>
-                                  </div>
+                        [...healthData.sleep]
+                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .map((s, index) => (
+                            <TableRow key={s.id || index}>
+                              <TableCell>{format(new Date(s.date), "MMM d, yyyy")}</TableCell>
+                              <TableCell>{s.hours}</TableCell>
+                              <TableCell className="capitalize">{s.quality || "good"}</TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Button variant="outline" size="sm" onClick={() => openEditDialog("sleep", index)}>
+                                    Edit
+                                  </Button>
+                                  <Button variant="destructive" size="sm" onClick={() => deleteReading("sleep", index)}>
+                                    Delete
+                                  </Button>
                                 </div>
-                              ))}
-                          </div>
-                        </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
                       ) : (
-                        <div className="text-center py-8 text-muted-foreground">No sleep data available</div>
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center">
+                            No readings yet
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Health Reading</DialogTitle>
+            <DialogDescription>Make changes to your health reading below.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 mb-4">
+            <Label htmlFor="edit-date">Date</Label>
+            <Input
+              id="edit-date"
+              name="date"
+              type="date"
+              value={editData.date || ""}
+              onChange={handleEditChange}
+              max={today}
+            />
+          </div>
+
+          {editType === "blood-pressure" && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-systolic">Systolic (mmHg)</Label>
+                <Input
+                  id="edit-systolic"
+                  name="systolic"
+                  type="number"
+                  value={editData.systolic || ""}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-diastolic">Diastolic (mmHg)</Label>
+                <Input
+                  id="edit-diastolic"
+                  name="diastolic"
+                  type="number"
+                  value={editData.diastolic || ""}
+                  onChange={handleEditChange}
+                />
+              </div>
             </div>
-          </main>
-        </div>
-      </div>
-    </ProtectedRoute>
+          )}
+
+          {editType === "heart-rate" && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-heart-rate">Heart Rate (BPM)</Label>
+              <Input
+                id="edit-heart-rate"
+                name="value"
+                type="number"
+                value={editData.value || ""}
+                onChange={handleEditChange}
+              />
+            </div>
+          )}
+
+          {editType === "weight" && (
+            <div className="space-y-2">
+              <Label htmlFor="edit-weight">Weight (kg)</Label>
+              <Input
+                id="edit-weight"
+                name="value"
+                type="number"
+                step="0.1"
+                value={editData.value || ""}
+                onChange={handleEditChange}
+              />
+            </div>
+          )}
+
+          {/* Update the edit dialog to include sleep quality dropdown */}
+          {/* Add this inside the edit dialog, after the sleep hours input */}
+          {editType === "sleep" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="edit-sleep">Sleep (hours)</Label>
+                <Input
+                  id="edit-sleep"
+                  name="hours"
+                  type="number"
+                  step="0.5"
+                  value={editData.hours || ""}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-sleep-quality">Sleep Quality</Label>
+                <select
+                  id="edit-sleep-quality"
+                  name="quality"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                  value={editData.quality || "good"}
+                  onChange={(e) => setEditData({ ...editData, quality: e.target.value })}
+                >
+                  <option value="poor">Poor</option>
+                  <option value="fair">Fair</option>
+                  <option value="good">Good</option>
+                  <option value="excellent">Excellent</option>
+                </select>
+              </div>
+            </>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEditedReading}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 

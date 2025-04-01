@@ -6,11 +6,12 @@ import { Sidebar } from "@/components/sidebar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useApp } from "@/context/app-provider"
 import { formatDate, formatDateTime, getNextAppointment } from "@/lib/utils"
-import { Activity, Calendar, Heart, User } from 'lucide-react'
+import { Activity, Calendar, Heart, User } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { HealthSummaryChart } from "@/components/charts/health-summary-chart"
+import { calculateProfileCompletion } from "@/lib/profile-utils"
 
 export default function Dashboard() {
   const { profile, appointments, healthData, currentDate, initialized } = useApp()
@@ -19,10 +20,31 @@ export default function Dashboard() {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
-  const nextAppointment = getNextAppointment(appointments)
-  const latestHeartRate = healthData.heartRate.length > 0 ? healthData.heartRate[healthData.heartRate.length - 1] : null
+  // Add null checks for all data
+  const safeAppointments = appointments || []
+  const safeHealthData = healthData || {
+    bloodPressure: [],
+    heartRate: [],
+    weight: [],
+    sleep: [],
+  }
+
+  // Ensure all health data arrays are actually arrays
+  const validHealthData = {
+    bloodPressure: Array.isArray(safeHealthData.bloodPressure) ? safeHealthData.bloodPressure : [],
+    heartRate: Array.isArray(safeHealthData.heartRate) ? safeHealthData.heartRate : [],
+    weight: Array.isArray(safeHealthData.weight) ? safeHealthData.weight : [],
+    sleep: Array.isArray(safeHealthData.sleep) ? safeHealthData.sleep : [],
+  }
+
+  const nextAppointment = getNextAppointment(safeAppointments)
+  const latestHeartRate =
+    validHealthData.heartRate.length > 0 ? validHealthData.heartRate[validHealthData.heartRate.length - 1] : null
+
   const latestBloodPressure =
-    healthData.bloodPressure.length > 0 ? healthData.bloodPressure[healthData.bloodPressure.length - 1] : null
+    validHealthData.bloodPressure.length > 0
+      ? validHealthData.bloodPressure[validHealthData.bloodPressure.length - 1]
+      : null
 
   const getDaysUntil = (date: Date | string): number => {
     const now = new Date()
@@ -30,6 +52,9 @@ export default function Dashboard() {
     const diff = appointmentDate.getTime() - now.getTime()
     return Math.ceil(diff / (1000 * 3600 * 24))
   }
+
+  // Calculate profile completion percentage
+  const profileCompletion = calculateProfileCompletion(profile || {})
 
   return (
     <ProtectedRoute>
@@ -44,7 +69,8 @@ export default function Dashboard() {
               <div className="flex flex-col gap-2">
                 <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
                 <p className="text-muted-foreground">
-                  Welcome back{profile.name ? `, ${profile.name.split(' ')[0]}` : ""}! Here's your health overview.
+                  Welcome back{profile && profile.name ? `, ${profile.name.split(" ")[0]}` : ""}! Here's your health
+                  overview.
                 </p>
                 <p className="text-sm text-muted-foreground">{formatDate(currentDate)}</p>
               </div>
@@ -109,9 +135,17 @@ export default function Dashboard() {
                     <User className="h-4 w-4 text-health-green-500" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{profile.name ? "40%" : "10%"}</div>
-                    <Progress value={profile.name ? 40 : 10} className="mt-2" />
-                    <p className="text-xs text-muted-foreground mt-2">Complete your profile for better insights</p>
+                    <div className="text-2xl font-bold">{profileCompletion}%</div>
+                    <Progress value={profileCompletion} className="mt-2" />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {profileCompletion < 100 ? (
+                        <Link href="/profile" className="text-health-green-500 hover:underline">
+                          Complete your profile for better insights
+                        </Link>
+                      ) : (
+                        "Profile complete"
+                      )}
+                    </p>
                   </CardContent>
                 </Card>
               </div>
@@ -123,7 +157,7 @@ export default function Dashboard() {
                     <CardDescription>Your health metrics over the past week</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <HealthSummaryChart healthData={healthData} height={200} />
+                    <HealthSummaryChart healthData={validHealthData} height={200} />
                   </CardContent>
                 </Card>
 
@@ -133,9 +167,9 @@ export default function Dashboard() {
                     <CardDescription>Your scheduled appointments</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {appointments.filter((a) => !a.completed).length > 0 ? (
+                    {safeAppointments.filter((a) => !a.completed).length > 0 ? (
                       <div className="space-y-4">
-                        {appointments
+                        {safeAppointments
                           .filter((appointment) => !appointment.completed)
                           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                           .slice(0, 3)

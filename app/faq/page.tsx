@@ -13,15 +13,54 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { Mail, Phone } from "lucide-react"
 import { ProtectedRoute } from "@/components/protected-route"
+import { useState } from "react"
 
 export default function FAQPage() {
   const { toast } = useToast()
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+  })
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { id, value } = e.target
+    setFormData((prev) => ({ ...prev, [id]: value }))
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Validate form
+    if (!formData.name || !formData.email || !formData.subject || !formData.message) {
+      toast({
+        title: "Form Error",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Create mailto link
+    const subject = encodeURIComponent(formData.subject)
+    const body = encodeURIComponent(`Name: ${formData.name}\nEmail: ${formData.email}\n\n${formData.message}`)
+    const mailtoLink = `mailto:sammymuchai44@gmail.com?subject=${subject}&body=${body}`
+
+    // Open email client
+    window.location.href = mailtoLink
+
     toast({
       title: "Message Sent",
       description: "Your message has been sent to our support team.",
+    })
+
+    // Reset form
+    setFormData({
+      name: "",
+      email: "",
+      subject: "",
+      message: "",
     })
   }
 
@@ -101,19 +140,35 @@ export default function FAQPage() {
                     <form onSubmit={handleSubmit} className="grid gap-4">
                       <div className="grid gap-2">
                         <Label htmlFor="name">Name</Label>
-                        <Input id="name" placeholder="Your name" />
+                        <Input id="name" placeholder="Your name" value={formData.name} onChange={handleChange} />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" placeholder="Your email" />
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="Your email"
+                          value={formData.email}
+                          onChange={handleChange}
+                        />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="subject">Subject</Label>
-                        <Input id="subject" placeholder="How can we help?" />
+                        <Input
+                          id="subject"
+                          placeholder="How can we help?"
+                          value={formData.subject}
+                          onChange={handleChange}
+                        />
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor="message">Message</Label>
-                        <Textarea id="message" placeholder="Describe your issue" />
+                        <Textarea
+                          id="message"
+                          placeholder="Describe your issue"
+                          value={formData.message}
+                          onChange={handleChange}
+                        />
                       </div>
                       <Button type="submit" className="w-full">
                         Send Message
@@ -134,7 +189,12 @@ export default function FAQPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium">Email</p>
-                        <p className="text-sm text-muted-foreground">sammymuchai44@gmail.com</p>
+                        <a
+                          href="mailto:sammymuchai44@gmail.com"
+                          className="text-sm text-muted-foreground hover:text-health-green-500"
+                        >
+                          sammymuchai44@gmail.com
+                        </a>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -143,7 +203,12 @@ export default function FAQPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium">Phone</p>
-                        <p className="text-sm text-muted-foreground">+254714552335</p>
+                        <a
+                          href="tel:+254714552335"
+                          className="text-sm text-muted-foreground hover:text-health-green-500"
+                        >
+                          +254714552335
+                        </a>
                       </div>
                     </div>
                     <div className="mt-4">

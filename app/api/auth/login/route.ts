@@ -1,22 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserByEmail } from "@/lib/db-service"
+import { getUserByEmail, getUserByUsername } from "@/lib/db-service"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json()
+    const { emailOrUsername, password } = await request.json()
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
+    if (!emailOrUsername || !password) {
+      return NextResponse.json({ error: "Email/username and password are required" }, { status: 400 })
     }
 
-    const user = await getUserByEmail(email)
+    // Check if the input is an email or username
+    const isEmail = emailOrUsername.includes("@")
 
+    // Get user by email or username
+    let user
+    if (isEmail) {
+      user = await getUserByEmail(emailOrUsername)
+    } else {
+      user = await getUserByUsername(emailOrUsername)
+    }
+
+    // If user not found or password doesn't match
     if (!user || user.password !== password) {
-      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }
 
-    // In a real app, you would use a proper authentication system
-    // with JWT tokens or sessions
+    // Return user info (excluding password)
     return NextResponse.json({
       success: true,
       user: {

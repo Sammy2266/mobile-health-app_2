@@ -17,6 +17,7 @@ import { ProtectedRoute } from "@/components/protected-route"
 export default function SettingsPage() {
   const { settings, updateSettings, initialized } = useApp()
   const { toast } = useToast()
+  const [isResetting, setIsResetting] = useState(false)
 
   const [formData, setFormData] = useState({
     theme: settings.theme,
@@ -61,11 +62,48 @@ export default function SettingsPage() {
     }
 
     updateSettings(updatedSettings)
+  }
+
+  const handleResetToDefaults = () => {
+    setIsResetting(true)
+
+    // Reset form data to default settings
+    setFormData({
+      theme: "system",
+      language: "en",
+      notifyAppointments: true,
+      notifyMedications: true,
+      notifyHealthTips: true,
+      notifyUpdates: true,
+      shareData: false,
+      anonymousAnalytics: true,
+    })
+
+    // Update settings with defaults
+    const defaultSettingsObj = {
+      ...settings,
+      theme: "system" as "light" | "dark" | "system",
+      language: "en",
+      notifications: {
+        appointments: true,
+        medications: true,
+        healthTips: true,
+        updates: true,
+      },
+      privacySettings: {
+        shareData: false,
+        anonymousAnalytics: true,
+      },
+    }
+
+    updateSettings(defaultSettingsObj)
 
     toast({
-      title: "Settings Updated",
-      description: "Your settings have been saved successfully.",
+      title: "Settings Reset",
+      description: "Your settings have been reset to defaults.",
     })
+
+    setIsResetting(false)
   }
 
   return (
@@ -73,7 +111,7 @@ export default function SettingsPage() {
       <div className="flex min-h-screen flex-col">
         <Header />
         <div className="flex flex-1">
-          <aside className="hidden w-64 border-r bg-muted/40 md:block">
+          <aside className="hidden w-64 border-r bg-[#1a2e22] md:block">
             <Sidebar />
           </aside>
           <main className="flex-1 p-4 md:p-6">
@@ -204,7 +242,7 @@ export default function SettingsPage() {
 
                   <Card className="md:col-span-2">
                     <CardFooter className="flex justify-between pt-6">
-                      <Button variant="outline" type="button">
+                      <Button variant="outline" type="button" onClick={handleResetToDefaults} disabled={isResetting}>
                         Reset to Defaults
                       </Button>
                       <Button type="submit">Save Changes</Button>

@@ -103,6 +103,12 @@ export async function getUserByEmail(email: string): Promise<UserCredentials | n
   return users.find((user) => user.email === email) || null
 }
 
+// Add this function to check for username uniqueness
+export async function getUserByUsername(username: string): Promise<UserCredentials | null> {
+  const users = await getUsers()
+  return users.find((user) => user.username === username) || null
+}
+
 export async function createUser(user: UserCredentials): Promise<UserCredentials> {
   const users = await getUsers()
   users.push(user)
@@ -623,4 +629,20 @@ export async function generateRandomData(userId: string): Promise<void> {
   const existingDocuments = readData<UserDocument & { userId: string }>(DOCUMENTS_DB)
   writeData(DOCUMENTS_DB, [...existingDocuments, ...documents])
 }
+
+// Add this function to db-service.ts if it doesn't exist
+// export async function getUserByUsername(username: string) {
+//   // In a real app, this would query a database
+//   // For this demo, we'll check localStorage
+//   try {
+//     const usersJson = localStorage.getItem("health_app_users")
+//     if (!usersJson) return null
+
+//     const users = JSON.parse(usersJson)
+//     return users.find((user: any) => user.username === username) || null
+//   } catch (error) {
+//     console.error("Error getting user by username:", error)
+//     return null
+//   }
+// }
 

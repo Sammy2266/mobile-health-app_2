@@ -9,6 +9,7 @@ import { Sidebar } from "./sidebar"
 import Image from "next/image"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export function Header() {
   const { currentDate, logout } = useApp()
@@ -34,10 +35,10 @@ export function Header() {
           </SheetContent>
         </Sheet>
 
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <Image src="/images/logo.png" alt="AfiaTrack Logo" width={32} height={32} className="mr-2" />
           <span className="hidden font-bold md:inline-block">AfiaTrack</span>
-        </div>
+        </Link>
 
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="hidden md:block text-sm text-muted-foreground">{formatDate(currentDate)}</div>
@@ -47,7 +48,7 @@ export function Header() {
           </Button>
           <ModeToggle />
           <Button variant="ghost" size="icon" onClick={handleLogout}>
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-5 w-4" />
             <span className="sr-only">Logout</span>
           </Button>
         </div>

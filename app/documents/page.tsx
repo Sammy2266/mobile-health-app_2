@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { Header } from "@/components/header"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
@@ -21,8 +23,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { useApp } from "@/context/app-provider"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Download, FileText, Plus, Trash } from "lucide-react"
-import { useState } from "react"
+import { Download, FileText, Plus, Trash, Upload, File, FileImage, FileIcon as FilePdf } from "lucide-react"
+import { useState, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -44,6 +46,8 @@ export default function DocumentsPage() {
   const { documents, updateDocuments, initialized } = useApp()
   const { toast } = useToast()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const form = useForm<DocumentFormValues>({
     resolver: zodResolver(documentFormSchema),
@@ -65,6 +69,9 @@ export default function DocumentsPage() {
       type: data.type,
       date: data.date.toISOString(),
       notes: data.notes,
+      fileUrl: "",
+      fileName: "",
+      fileType: "",
     }
 
     const updatedDocuments = [...documents, newDocument]
@@ -93,6 +100,95 @@ export default function DocumentsPage() {
     return documents
       .filter((doc) => doc.type === type)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }
+
+  const handleFileUpload = (documentId: string) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+      fileInputRef.current.dataset.documentId = documentId
+    }
+  }
+
+  const processFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    const documentId = event.target.dataset.documentId
+
+    if (!file || !documentId) return
+
+    setIsUploading(true)
+
+    try {
+      // In a real app, you would upload the file to a server or cloud storage
+      // For this demo, we'll simulate a file upload with a delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Create a fake URL for the file
+      const fileUrl = URL.createObjectURL(file)
+
+      // Update the document with the file information
+      const updatedDocuments = documents.map((doc) => {
+        if (doc.id === documentId) {
+          return {
+            ...doc,
+            fileUrl,
+            fileName: file.name,
+            fileType: file.type,
+          }
+        }
+        return doc
+      })
+
+      updateDocuments(updatedDocuments)
+
+      toast({
+        title: "File Uploaded",
+        description: `${file.name} has been uploaded successfully.`,
+      })
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      toast({
+        title: "Upload Failed",
+        description: "There was an error uploading your file. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(false)
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleDownload = (document: any) => {
+    if (!document.fileUrl) {
+      toast({
+        title: "No File Available",
+        description: "There is no file attached to this document.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Create an anchor element and trigger download
+    const a = document.createElement("a")
+    a.href = document.fileUrl
+    a.download = document.fileName || `document-${document.id}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+
+    toast({
+      title: "Download Started",
+      description: `${document.fileName || "Document"} is being downloaded.`,
+    })
+  }
+
+  const getFileIcon = (fileType: string) => {
+    if (!fileType) return <File className="h-4 w-4" />
+    if (fileType.startsWith("image/")) return <FileImage className="h-4 w-4" />
+    if (fileType === "application/pdf") return <FilePdf className="h-4 w-4" />
+    return <File className="h-4 w-4" />
   }
 
   const reports = getDocumentsByType("report")
@@ -204,6 +300,15 @@ export default function DocumentsPage() {
                 </Dialog>
               </div>
 
+              {/* Hidden file input for uploads */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={processFileUpload}
+                accept="image/*,.pdf,.doc,.docx"
+              />
+
               <Tabs defaultValue="all">
                 <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="all">All</TabsTrigger>
@@ -247,12 +352,40 @@ export default function DocumentsPage() {
                                     {new Date(document.date).toLocaleDateString()}
                                   </div>
                                   {document.notes && <p className="text-sm mt-2">{document.notes}</p>}
+                                  {document.fileName && (
+                                    <div className="flex items-center gap-2 mt-2 text-sm text-health-green-600 dark:text-health-green-400">
+                                      {getFileIcon(document.fileType)}
+                                      <span>{document.fileName}</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-2 mt-4 md:mt-0">
-                                  <Button variant="outline" size="icon" disabled={!document.fileUrl}>
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="outline" size="icon" onClick={() => handleDelete(document.id)}>
+                                  {document.fileUrl ? (
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => handleDownload(document)}
+                                      title="Download file"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => handleFileUpload(document.id)}
+                                      disabled={isUploading}
+                                      title="Upload file"
+                                    >
+                                      <Upload className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDelete(document.id)}
+                                    title="Delete document"
+                                  >
                                     <Trash className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -288,12 +421,40 @@ export default function DocumentsPage() {
                                   {new Date(document.date).toLocaleDateString()}
                                 </div>
                                 {document.notes && <p className="text-sm mt-2">{document.notes}</p>}
+                                {document.fileName && (
+                                  <div className="flex items-center gap-2 mt-2 text-sm text-health-green-600 dark:text-health-green-400">
+                                    {getFileIcon(document.fileType)}
+                                    <span>{document.fileName}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 mt-4 md:mt-0">
-                                <Button variant="outline" size="icon" disabled={!document.fileUrl}>
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" size="icon" onClick={() => handleDelete(document.id)}>
+                                {document.fileUrl ? (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDownload(document)}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleFileUpload(document.id)}
+                                    disabled={isUploading}
+                                    title="Upload file"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => handleDelete(document.id)}
+                                  title="Delete document"
+                                >
                                   <Trash className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -329,12 +490,40 @@ export default function DocumentsPage() {
                                   {new Date(document.date).toLocaleDateString()}
                                 </div>
                                 {document.notes && <p className="text-sm mt-2">{document.notes}</p>}
+                                {document.fileName && (
+                                  <div className="flex items-center gap-2 mt-2 text-sm text-health-green-600 dark:text-health-green-400">
+                                    {getFileIcon(document.fileType)}
+                                    <span>{document.fileName}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 mt-4 md:mt-0">
-                                <Button variant="outline" size="icon" disabled={!document.fileUrl}>
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" size="icon" onClick={() => handleDelete(document.id)}>
+                                {document.fileUrl ? (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDownload(document)}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleFileUpload(document.id)}
+                                    disabled={isUploading}
+                                    title="Upload file"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => handleDelete(document.id)}
+                                  title="Delete document"
+                                >
                                   <Trash className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -370,12 +559,40 @@ export default function DocumentsPage() {
                                   {new Date(document.date).toLocaleDateString()}
                                 </div>
                                 {document.notes && <p className="text-sm mt-2">{document.notes}</p>}
+                                {document.fileName && (
+                                  <div className="flex items-center gap-2 mt-2 text-sm text-health-green-600 dark:text-health-green-400">
+                                    {getFileIcon(document.fileType)}
+                                    <span>{document.fileName}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 mt-4 md:mt-0">
-                                <Button variant="outline" size="icon" disabled={!document.fileUrl}>
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" size="icon" onClick={() => handleDelete(document.id)}>
+                                {document.fileUrl ? (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDownload(document)}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleFileUpload(document.id)}
+                                    disabled={isUploading}
+                                    title="Upload file"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => handleDelete(document.id)}
+                                  title="Delete document"
+                                >
                                   <Trash className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -411,12 +628,40 @@ export default function DocumentsPage() {
                                   {new Date(document.date).toLocaleDateString()}
                                 </div>
                                 {document.notes && <p className="text-sm mt-2">{document.notes}</p>}
+                                {document.fileName && (
+                                  <div className="flex items-center gap-2 mt-2 text-sm text-health-green-600 dark:text-health-green-400">
+                                    {getFileIcon(document.fileType)}
+                                    <span>{document.fileName}</span>
+                                  </div>
+                                )}
                               </div>
                               <div className="flex items-center gap-2 mt-4 md:mt-0">
-                                <Button variant="outline" size="icon" disabled={!document.fileUrl}>
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button variant="outline" size="icon" onClick={() => handleDelete(document.id)}>
+                                {document.fileUrl ? (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleDownload(document)}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => handleFileUpload(document.id)}
+                                    disabled={isUploading}
+                                    title="Upload file"
+                                  >
+                                    <Upload className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => handleDelete(document.id)}
+                                  title="Delete document"
+                                >
                                   <Trash className="h-4 w-4" />
                                 </Button>
                               </div>

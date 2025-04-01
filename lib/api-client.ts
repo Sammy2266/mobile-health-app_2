@@ -1,181 +1,398 @@
-// Client-side API service
+// API client for interacting with the local storage backend
 
-// Base URL for API requests
-const API_BASE_URL = "/api"
+import type {
+  UserProfile,
+  UserSettings,
+  UserAppointment,
+  UserHealthData,
+  UserMedication,
+  UserDocument,
+} from "@/types/database"
 
-// Helper function for making API requests
-async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+import * as localStorageService from "@/lib/local-storage-service"
 
-  const defaultHeaders = {
-    "Content-Type": "application/json",
-  }
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-    })
-
-    // First check if the response is JSON
-    const contentType = response.headers.get("content-type")
-    if (!contentType || !contentType.includes("application/json")) {
-      throw new Error(`API returned non-JSON response: ${await response.text()}`)
-    }
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || `API error: ${response.status}`)
-    }
-
-    return data as T
-  } catch (error) {
-    console.error(`API request failed for ${url}:`, error)
-    throw error
-  }
+// Helper function to simulate API latency - reduced for faster loading
+const simulateLatency = async (): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, 100)) // Reduced from 300ms to 100ms
 }
 
-// Auth API
-export async function login(email: string, password: string) {
-  return fetchAPI("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  })
+// Auth endpoints
+export async function login(emailOrUsername: string, password: string) {
+  await simulateLatency()
+
+  try {
+    // Check if the input is an email or username
+    const isEmail = emailOrUsername.includes("@")
+
+    // Get user by email or username
+    let user
+    if (isEmail) {
+      user = await localStorageService.getUserByEmail(emailOrUsername)
+    } else {
+      user = await localStorageService.getUserByUsername(emailOrUsername)
+    }
+
+    // If user not found or password doesn't match
+    if (!user || user.password !== password) {
+      return { success: false, error: "Invalid credentials" }
+    }
+
+    // Return user info (excluding password)
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      },
+    }
+  } catch (error) {
+    console.error("Login error:", error)
+    return { success: false, error: "An error occurred during login" }
+  }
 }
 
 export async function signup(username: string, email: string, password: string) {
-  return fetchAPI("/auth/signup", {
-    method: "POST",
-    body: JSON.stringify({ username, email, password }),
-  })
+  await simulateLatency()
+
+  try {
+    // Check if email already exists
+    const existingUserByEmail = await localStorageService.getUserByEmail(email)
+    if (existingUserByEmail) {
+      return { success: false, error: "Email already exists" }
+    }
+
+    // Check if username already exists
+    const existingUserByUsername = await localStorageService.getUserByUsername(username)
+    if (existingUserByUsername) {
+      return { success: false, error: "Username already exists" }
+    }
+
+    // Create new user
+    const userId = crypto.randomUUID()
+    const newUser = await localStorageService.createUser({
+      id: userId,
+      username,
+      email,
+      password, // In a real app, this would be hashed
+      createdAt: new Date().toISOString(),
+    })
+
+    // Create profile
+    await localStorageService.createProfile({
+      id: userId,
+      name: username,
+      email,
+    })
+
+    // Generate random data for demo purposes
+    await localStorageService.generateRandomData(userId)
+
+    return {
+      success: true,
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+      },
+    }
+  } catch (error) {
+    console.error("Signup error:", error)
+    return { success: false, error: "An error occurred during signup" }
+  }
 }
 
-export async function forgotPassword(method: "email" | "phone", email?: string, phone?: string) {
-  return fetchAPI("/auth/forgot-password", {
-    method: "POST",
-    body: JSON.stringify({ method, email, phone }),
+export async function forgotPassword(email: string) {
+  await simulateLatency()
+
+  const user = await localStorageService.getUserByEmail(email)
+  if (!user) {
+    throw new Error("No account found with this email")
+  }
+
+  // Generate verification code
+  const code = Math.floor(100000 + Math.random() * 900000).toString()
+  const expiresAt = new Date()
+  expiresAt.setMinutes(expiresAt.getMinutes() + 15)
+
+  await localStorageService.createVerificationCode({
+    userId: user.id,
+    code,
+    expiresAt: expiresAt.toISOString(),
+    type: "password_reset",
   })
+
+  return {
+    success: true,
+    userId: user.id,
+    code,
+    message: `Verification code sent to your email`,
+  }
 }
 
 export async function resetPassword(userId: string, code: string, newPassword: string) {
-  return fetchAPI("/auth/reset-password", {
-    method: "POST",
-    body: JSON.stringify({ userId, code, newPassword }),
-  })
+  await simulateLatency()
+
+  const verified = await localStorageService.verifyCode(userId, code, "password_reset")
+  if (!verified) {
+    throw new Error("Invalid or expired verification code")
+  }
+
+  await localStorageService.updateUserPassword(userId, newPassword)
+
+  return {
+    success: true,
+  }
 }
 
-// Profile API
+export async function verifyUser(userId: string) {
+  await simulateLatency()
+
+  const user = await localStorageService.getUserById(userId)
+  return {
+    exists: !!user,
+  }
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
+  await simulateLatency()
+
+  const user = await localStorageService.getUserById(userId)
+  if (!user) {
+    throw new Error("User not found")
+  }
+
+  if (user.password !== currentPassword) {
+    throw new Error("Current password is incorrect")
+  }
+
+  await localStorageService.updateUserPassword(userId, newPassword)
+
+  return {
+    success: true,
+  }
+}
+
+// Profile endpoints
 export async function getProfile(userId: string) {
-  return fetchAPI(`/profile?userId=${userId}`)
+  await simulateLatency()
+  return localStorageService.getProfileById(userId)
 }
 
-export async function updateUserProfile(profile: any) {
-  return fetchAPI("/profile", {
-    method: "PUT",
-    body: JSON.stringify(profile),
-  })
+export async function updateUserProfile(profile: UserProfile) {
+  await simulateLatency()
+  return localStorageService.updateProfile(profile)
 }
 
-// Settings API
+// Settings endpoints
 export async function getSettings(userId: string) {
-  return fetchAPI(`/settings?userId=${userId}`)
+  await simulateLatency()
+  return localStorageService.getSettingsForUser(userId)
 }
 
-export async function updateUserSettings(userId: string, settings: any) {
-  return fetchAPI("/settings", {
-    method: "PUT",
-    body: JSON.stringify({ userId, ...settings }),
-  })
+export async function updateUserSettings(userId: string, settings: UserSettings) {
+  await simulateLatency()
+  return localStorageService.updateSettings(userId, settings)
 }
 
-// Appointments API
+// Appointments endpoints
 export async function getAppointments(userId: string) {
-  return fetchAPI(`/appointments?userId=${userId}`)
+  await simulateLatency()
+  return localStorageService.getAppointmentsForUser(userId)
 }
 
-export async function createAppointment(userId: string, appointment: any) {
-  return fetchAPI("/appointments", {
-    method: "POST",
-    body: JSON.stringify({ userId, ...appointment }),
-  })
+export async function updateAppointments(userId: string, appointments: UserAppointment[]) {
+  await simulateLatency()
+
+  // Get current appointments
+  const currentAppointments = await localStorageService.getAppointmentsForUser(userId)
+
+  // Process each appointment
+  for (const appointment of appointments) {
+    const existingAppointment = currentAppointments.find((a) => a.id === appointment.id)
+
+    if (existingAppointment) {
+      // Update existing appointment
+      await localStorageService.updateAppointment(userId, appointment)
+    } else {
+      // Create new appointment
+      await localStorageService.createAppointment(userId, appointment)
+    }
+  }
+
+  // Delete appointments that are not in the new list
+  for (const currentAppointment of currentAppointments) {
+    if (!appointments.some((a) => a.id === currentAppointment.id)) {
+      await localStorageService.deleteAppointment(userId, currentAppointment.id)
+    }
+  }
+
+  return { success: true }
 }
 
-export async function updateAppointment(userId: string, appointment: any) {
-  return fetchAPI(`/appointments/${appointment.id}`, {
-    method: "PUT",
-    body: JSON.stringify({ userId, ...appointment }),
-  })
-}
-
-export async function deleteAppointment(userId: string, appointmentId: string) {
-  return fetchAPI(`/appointments/${appointmentId}?userId=${userId}`, {
-    method: "DELETE",
-  })
-}
-
-// Health Data API
+// Health data endpoints
 export async function getHealthData(userId: string) {
-  return fetchAPI(`/health-data?userId=${userId}`)
+  await simulateLatency()
+  return localStorageService.getHealthDataForUser(userId)
 }
 
-export async function updateHealthData(userId: string, data: any) {
-  return fetchAPI("/health-data", {
-    method: "PUT",
-    body: JSON.stringify({ userId, ...data }),
-  })
+export async function updateHealthData(userId: string, data: UserHealthData) {
+  await simulateLatency()
+  // Ensure we're passing the userId to the local storage service
+  const result = await localStorageService.updateHealthData(userId, data)
+  console.log("Health data updated:", result)
+  return result
 }
 
-// Medications API
+// Medications endpoints
 export async function getMedications(userId: string) {
-  return fetchAPI(`/medications?userId=${userId}`)
+  await simulateLatency()
+  return localStorageService.getMedicationsForUser(userId)
 }
 
-export async function createMedication(userId: string, medication: any) {
-  return fetchAPI("/medications", {
-    method: "POST",
-    body: JSON.stringify({ userId, ...medication }),
-  })
+export async function updateMedications(userId: string, medications: UserMedication[]) {
+  await simulateLatency()
+
+  // Get current medications
+  const currentMedications = await localStorageService.getMedicationsForUser(userId)
+
+  // Process each medication
+  for (const medication of medications) {
+    const existingMedication = currentMedications.find((m) => m.id === medication.id)
+
+    if (existingMedication) {
+      // Update existing medication
+      await localStorageService.updateMedication(userId, medication)
+    } else {
+      // Create new medication
+      await localStorageService.createMedication(userId, medication)
+    }
+  }
+
+  // Delete medications that are not in the new list
+  for (const currentMedication of currentMedications) {
+    if (!medications.some((m) => m.id === currentMedication.id)) {
+      await localStorageService.deleteMedication(userId, currentMedication.id)
+    }
+  }
+
+  return { success: true }
 }
 
-export async function updateMedication(userId: string, medication: any) {
-  return fetchAPI(`/medications/${medication.id}`, {
-    method: "PUT",
-    body: JSON.stringify({ userId, ...medication }),
-  })
-}
-
-export async function deleteMedication(userId: string, medicationId: string) {
-  return fetchAPI(`/medications/${medicationId}?userId=${userId}`, {
-    method: "DELETE",
-  })
-}
-
-// Documents API
+// Documents endpoints
 export async function getDocuments(userId: string) {
-  return fetchAPI(`/documents?userId=${userId}`)
+  await simulateLatency()
+  return localStorageService.getDocumentsForUser(userId)
 }
 
-export async function createDocument(userId: string, document: any) {
-  return fetchAPI("/documents", {
-    method: "POST",
-    body: JSON.stringify({ userId, ...document }),
-  })
+export async function updateDocuments(userId: string, documents: UserDocument[]) {
+  await simulateLatency()
+
+  // Get current documents
+  const currentDocuments = await localStorageService.getDocumentsForUser(userId)
+
+  // Process each document
+  for (const document of documents) {
+    const existingDocument = currentDocuments.find((d) => d.id === document.id)
+
+    if (existingDocument) {
+      // Update existing document
+      await localStorageService.updateDocument(userId, document)
+    } else {
+      // Create new document
+      await localStorageService.createDocument(userId, document)
+    }
+  }
+
+  // Delete documents that are not in the new list
+  for (const currentDocument of currentDocuments) {
+    if (!documents.some((d) => d.id === currentDocument.id)) {
+      await localStorageService.deleteDocument(userId, currentDocument.id)
+    }
+  }
+
+  return { success: true }
 }
 
-export async function updateDocument(userId: string, document: any) {
-  return fetchAPI(`/documents/${document.id}`, {
-    method: "PUT",
-    body: JSON.stringify({ userId, ...document }),
-  })
+// Health tips endpoints
+export async function searchHealthTips(query: string) {
+  await simulateLatency()
+
+  // Mock health tips search
+  const allTips = [
+    {
+      id: "1",
+      title: "Stay Hydrated",
+      description: "Drink at least 8 glasses of water daily for optimal health.",
+      category: "General Health",
+      priority: "medium",
+    },
+    {
+      id: "2",
+      title: "Regular Exercise",
+      description: "Aim for at least 30 minutes of moderate activity most days of the week.",
+      category: "Fitness",
+      priority: "high",
+    },
+    {
+      id: "3",
+      title: "Balanced Diet",
+      description: "Include a variety of fruits, vegetables, whole grains, and lean proteins in your meals.",
+      category: "Nutrition",
+      priority: "high",
+    },
+    {
+      id: "4",
+      title: "Adequate Sleep",
+      description: "Adults should aim for 7-9 hours of quality sleep each night.",
+      category: "Sleep",
+      priority: "high",
+    },
+    {
+      id: "5",
+      title: "Stress Management",
+      description: "Practice relaxation techniques like deep breathing, meditation, or yoga.",
+      category: "Mental Health",
+      priority: "medium",
+    },
+  ]
+
+  if (!query) return allTips
+
+  return allTips.filter(
+    (tip) =>
+      tip.title.toLowerCase().includes(query.toLowerCase()) ||
+      tip.description.toLowerCase().includes(query.toLowerCase()) ||
+      tip.category.toLowerCase().includes(query.toLowerCase()),
+  )
 }
 
-export async function deleteDocument(userId: string, documentId: string) {
-  return fetchAPI(`/documents/${documentId}?userId=${userId}`, {
-    method: "DELETE",
-  })
+export async function getPersonalizedTips(userId: string) {
+  await simulateLatency()
+
+  // Mock personalized tips
+  return [
+    {
+      id: "p1",
+      title: "Monitor Your Blood Pressure",
+      description: "Regular monitoring helps manage hypertension and prevent complications.",
+      category: "Heart Health",
+      priority: "high",
+    },
+    {
+      id: "p2",
+      title: "Take Medications as Prescribed",
+      description: "Follow your doctor's instructions for all medications to ensure effectiveness.",
+      category: "Medication Management",
+      priority: "high",
+    },
+    {
+      id: "p3",
+      title: "Schedule Regular Check-ups",
+      description: "Regular visits with your healthcare provider help catch issues early.",
+      category: "Preventive Care",
+      priority: "medium",
+    },
+  ]
 }
 
