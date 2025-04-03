@@ -11,13 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/components/ui/use-toast"
 import { useApp } from "@/context/app-provider"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ProtectedRoute } from "@/components/protected-route"
+import { useTheme } from "next-themes"
+import { translations } from "@/lib/translations"
 
 export default function SettingsPage() {
   const { settings, updateSettings, initialized } = useApp()
   const { toast } = useToast()
   const [isResetting, setIsResetting] = useState(false)
+  const { setTheme } = useTheme()
+  const [currentLanguage, setCurrentLanguage] = useState(settings.language || "en")
+
+  // Get translations based on current language
+  const t = (key: string) => {
+    return translations[currentLanguage]?.[key] || translations["en"][key] || key
+  }
 
   const [formData, setFormData] = useState({
     theme: settings.theme,
@@ -30,8 +39,20 @@ export default function SettingsPage() {
     anonymousAnalytics: settings.privacySettings.anonymousAnalytics,
   })
 
+  // Update theme when formData.theme changes
+  useEffect(() => {
+    if (formData.theme) {
+      setTheme(formData.theme)
+    }
+  }, [formData.theme, setTheme])
+
+  // Update language when formData.language changes
+  useEffect(() => {
+    setCurrentLanguage(formData.language)
+  }, [formData.language])
+
   if (!initialized) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+    return <div className="flex items-center justify-center min-h-screen">{t("loading")}</div>
   }
 
   const handleSwitchChange = (name: string, checked: boolean) => {
@@ -40,6 +61,16 @@ export default function SettingsPage() {
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
+
+    // Apply theme change immediately
+    if (name === "theme") {
+      setTheme(value)
+    }
+
+    // Apply language change immediately
+    if (name === "language") {
+      setCurrentLanguage(value)
+    }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -96,11 +127,17 @@ export default function SettingsPage() {
       },
     }
 
+    // Apply theme change immediately
+    setTheme("system")
+
+    // Apply language change immediately
+    setCurrentLanguage("en")
+
     updateSettings(defaultSettingsObj)
 
     toast({
-      title: "Settings Reset",
-      description: "Your settings have been reset to defaults.",
+      title: t("settingsReset"),
+      description: t("settingsResetMessage"),
     })
 
     setIsResetting(false)
@@ -117,45 +154,43 @@ export default function SettingsPage() {
           <main className="flex-1 p-4 md:p-6">
             <div className="flex flex-col gap-4 md:gap-8">
               <div className="flex flex-col gap-2">
-                <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-                <p className="text-muted-foreground">Manage your app preferences and notifications</p>
+                <h1 className="text-3xl font-bold tracking-tight">{t("settings")}</h1>
+                <p className="text-muted-foreground">{t("configureNotifications")}</p>
               </div>
 
               <form onSubmit={handleSubmit}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Appearance</CardTitle>
-                      <CardDescription>Customize how the app looks</CardDescription>
+                      <CardTitle>{t("appearance")}</CardTitle>
+                      <CardDescription>{t("customizeAppLooks")}</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-6">
                       <div className="grid gap-2">
-                        <Label htmlFor="theme">Theme</Label>
+                        <Label htmlFor="theme">{t("theme")}</Label>
                         <Select value={formData.theme} onValueChange={(value) => handleSelectChange("theme", value)}>
                           <SelectTrigger id="theme">
-                            <SelectValue placeholder="Select theme" />
+                            <SelectValue placeholder={t("theme")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="light">Light</SelectItem>
-                            <SelectItem value="dark">Dark</SelectItem>
-                            <SelectItem value="system">System</SelectItem>
+                            <SelectItem value="light">{t("light")}</SelectItem>
+                            <SelectItem value="dark">{t("dark")}</SelectItem>
+                            <SelectItem value="system">{t("system")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="grid gap-2">
-                        <Label htmlFor="language">Language</Label>
+                        <Label htmlFor="language">{t("language")}</Label>
                         <Select
                           value={formData.language}
                           onValueChange={(value) => handleSelectChange("language", value)}
                         >
                           <SelectTrigger id="language">
-                            <SelectValue placeholder="Select language" />
+                            <SelectValue placeholder={t("language")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="en">English</SelectItem>
-                            <SelectItem value="es">Spanish</SelectItem>
-                            <SelectItem value="fr">French</SelectItem>
-                            <SelectItem value="de">German</SelectItem>
+                            <SelectItem value="en">{t("english")}</SelectItem>
+                            <SelectItem value="sw">{t("swahili")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -164,13 +199,13 @@ export default function SettingsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Notifications</CardTitle>
-                      <CardDescription>Configure your notification preferences</CardDescription>
+                      <CardTitle>{t("notifications")}</CardTitle>
+                      <CardDescription>{t("configureNotifications")}</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-6">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="notifyAppointments" className="flex-1">
-                          Appointment Reminders
+                          {t("appointmentReminders")}
                         </Label>
                         <Switch
                           id="notifyAppointments"
@@ -180,7 +215,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="notifyMedications" className="flex-1">
-                          Medication Reminders
+                          {t("medicationReminders")}
                         </Label>
                         <Switch
                           id="notifyMedications"
@@ -190,7 +225,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="notifyHealthTips" className="flex-1">
-                          Health Tips
+                          {t("healthTipsNotifications")}
                         </Label>
                         <Switch
                           id="notifyHealthTips"
@@ -200,7 +235,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="notifyUpdates" className="flex-1">
-                          App Updates
+                          {t("appUpdates")}
                         </Label>
                         <Switch
                           id="notifyUpdates"
@@ -213,13 +248,13 @@ export default function SettingsPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Privacy</CardTitle>
-                      <CardDescription>Manage your data sharing preferences</CardDescription>
+                      <CardTitle>{t("privacy")}</CardTitle>
+                      <CardDescription>{t("manageDataSharing")}</CardDescription>
                     </CardHeader>
                     <CardContent className="grid gap-6">
                       <div className="flex items-center justify-between">
                         <Label htmlFor="shareData" className="flex-1">
-                          Share Health Data with Providers
+                          {t("shareHealthData")}
                         </Label>
                         <Switch
                           id="shareData"
@@ -229,7 +264,7 @@ export default function SettingsPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="anonymousAnalytics" className="flex-1">
-                          Anonymous Analytics
+                          {t("anonymousAnalytics")}
                         </Label>
                         <Switch
                           id="anonymousAnalytics"
@@ -243,9 +278,9 @@ export default function SettingsPage() {
                   <Card className="md:col-span-2">
                     <CardFooter className="flex justify-between pt-6">
                       <Button variant="outline" type="button" onClick={handleResetToDefaults} disabled={isResetting}>
-                        Reset to Defaults
+                        {t("resetToDefaults")}
                       </Button>
-                      <Button type="submit">Save Changes</Button>
+                      <Button type="submit">{t("saveChanges")}</Button>
                     </CardFooter>
                   </Card>
                 </div>

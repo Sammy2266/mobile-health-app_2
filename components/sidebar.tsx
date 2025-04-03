@@ -23,76 +23,83 @@ import {
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ModeToggle } from "@/components/mode-toggle"
+import { translations } from "@/lib/translations"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
-  const { isAuthenticated, logout } = useApp()
+  const { isAuthenticated, logout, settings } = useApp()
+
+  // Get translations based on user's language preference
+  const language = settings?.language || "en"
+  const t = (key: string) => {
+    return translations[language]?.[key] || translations["en"][key] || key
+  }
 
   const routes = [
     {
-      label: "Dashboard",
+      label: t("dashboard"),
       icon: Home,
       href: "/",
       active: pathname === "/",
     },
     {
-      label: "Health Data",
+      label: t("healthData"),
       icon: Activity,
       href: "/health-data",
       active: pathname === "/health-data",
     },
     {
-      label: "Appointments",
+      label: t("appointments"),
       icon: Calendar,
       href: "/appointments",
       active: pathname === "/appointments",
     },
     {
-      label: "Medications",
+      label: t("medications"),
       icon: Pill,
       href: "/medications",
       active: pathname === "/medications",
     },
     {
-      label: "Documents",
+      label: t("documents"),
       icon: FileText,
       href: "/documents",
       active: pathname === "/documents",
     },
     {
-      label: "Workouts",
+      label: t("workouts"),
       icon: Dumbbell,
       href: "/workouts",
       active: pathname === "/workouts",
     },
     {
-      label: "Water Intake",
+      label: t("waterIntake"),
       icon: Droplet,
       href: "/water-intake",
       active: pathname === "/water-intake",
     },
     {
-      label: "Health Tips",
+      label: t("healthTips"),
       icon: Lightbulb,
       href: "/health-tips",
       active: pathname === "/health-tips",
     },
     {
-      label: "Reports",
+      label: t("reports"),
       icon: Heart,
       href: "/reports",
       active: pathname === "/reports",
     },
     {
-      label: "Profile",
+      label: t("profile"),
       icon: User,
       href: "/profile",
       active: pathname === "/profile",
     },
     {
-      label: "Settings",
+      label: t("settings"),
       icon: Settings,
       href: "/settings",
       active: pathname === "/settings",
@@ -108,7 +115,7 @@ export function Sidebar({ className }: SidebarProps) {
       <div className="px-4 py-2 flex items-center justify-between">
         <Link href="/" className="flex items-center">
           <img src="/images/logo.png" alt="Health Tracker" className="h-8 w-8 mr-2" />
-          <h1 className="text-xl font-bold text-primary dark:text-white">Health Tracker</h1>
+          <h1 className="text-xl font-bold text-primary dark:text-white">{t("appName")}</h1>
         </Link>
         <ModeToggle />
       </div>
@@ -140,7 +147,7 @@ export function Sidebar({ className }: SidebarProps) {
           onClick={logout}
         >
           <LogOut className="mr-2 h-5 w-5" />
-          Logout
+          {t("logout")}
         </Button>
       </div>
     </div>

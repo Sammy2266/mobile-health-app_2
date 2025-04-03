@@ -14,13 +14,26 @@ import {
   getActiveRemindersInfo,
 } from "@/lib/notification-service"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useApp } from "@/context/app-provider"
+import { translations } from "@/lib/translations"
 
-export function NotificationSetup() {
+interface NotificationSetupProps {
+  onClose?: () => void
+}
+
+export function NotificationSetup({ onClose }: NotificationSetupProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false)
   const [systemInitialized, setSystemInitialized] = useState(false)
   const [showDebugInfo, setShowDebugInfo] = useState(false)
   const [activeReminders, setActiveReminders] = useState<any[]>([])
   const { toast } = useToast()
+  const { settings } = useApp()
+
+  // Get translations based on user's language preference
+  const language = settings?.language || "en"
+  const t = (key: string) => {
+    return translations[language]?.[key] || translations["en"][key] || key
+  }
 
   // Check notification status on mount
   useEffect(() => {
@@ -124,10 +137,8 @@ export function NotificationSetup() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Notification Settings</CardTitle>
-        <CardDescription>
-          Enable notifications to receive medication reminders even when the app is closed
-        </CardDescription>
+        <CardTitle>{t("notifications")}</CardTitle>
+        <CardDescription>{t("configureNotifications")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>

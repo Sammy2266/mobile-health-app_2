@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useApp } from "@/context/app-provider"
 import { useToast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
@@ -25,9 +25,29 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { format } from "date-fns"
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+
+interface HealthData {
+  id: string
+  date: string
+  value: number | string
+  notes?: string
+}
+
+interface BloodPressureData extends HealthData {
+  systolic: number
+  diastolic: number
+}
 
 export default function HealthDataPage() {
-  const { healthData, updateHealthData } = useApp()
+  const { healthData, updateHealthData, initialized } = useApp()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("blood-pressure")
 
@@ -56,6 +76,13 @@ export default function HealthDataPage() {
 
   // Add sleep quality state
   const [sleepQuality, setSleepQuality] = useState<"poor" | "fair" | "good" | "excellent">("good")
+
+  // Add delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteType, setDeleteType] = useState("")
+  const [deleteIndex, setDeleteIndex] = useState(-1)
+
+  useEffect(() => {}, [healthData])
 
   const handleBloodPressureSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -86,24 +113,22 @@ export default function HealthDataPage() {
     selectedDate.setHours(12, 0, 0, 0)
     const dateString = selectedDate.toISOString()
 
-    // Check for duplicate entries
+    // Check for duplicate entries by date only (ignoring time)
     const isDuplicate = healthData.bloodPressure.some((bp) => {
       const bpDate = new Date(bp.date)
-      bpDate.setHours(0, 0, 0, 0)
-      const selectedDateMidnight = new Date(selectedDate)
-      selectedDateMidnight.setHours(0, 0, 0, 0)
+      const selectedDateOnly = new Date(selectedDate)
 
-      return (
-        bp.systolic === systolicValue &&
-        bp.diastolic === diastolicValue &&
-        bpDate.getTime() === selectedDateMidnight.getTime()
-      )
+      // Set both dates to start of day for comparison
+      bpDate.setHours(0, 0, 0, 0)
+      selectedDateOnly.setHours(0, 0, 0, 0)
+
+      return bpDate.getTime() === selectedDateOnly.getTime()
     })
 
     if (isDuplicate) {
       toast({
         title: "Duplicate entry",
-        description: "This blood pressure reading already exists for the selected date.",
+        description: "You already have a blood pressure reading for this date. Please edit the existing entry instead.",
         variant: "destructive",
       })
       return
@@ -170,20 +195,22 @@ export default function HealthDataPage() {
     selectedDate.setHours(12, 0, 0, 0)
     const dateString = selectedDate.toISOString()
 
-    // Check for duplicate entries
+    // Check for duplicate entries by date only (ignoring time)
     const isDuplicate = healthData.heartRate.some((hr) => {
       const hrDate = new Date(hr.date)
-      hrDate.setHours(0, 0, 0, 0)
-      const selectedDateMidnight = new Date(selectedDate)
-      selectedDateMidnight.setHours(0, 0, 0, 0)
+      const selectedDateOnly = new Date(selectedDate)
 
-      return hr.value === heartRateValue && hrDate.getTime() === selectedDateMidnight.getTime()
+      // Set both dates to start of day for comparison
+      hrDate.setHours(0, 0, 0, 0)
+      selectedDateOnly.setHours(0, 0, 0, 0)
+
+      return hrDate.getTime() === selectedDateOnly.getTime()
     })
 
     if (isDuplicate) {
       toast({
         title: "Duplicate entry",
-        description: "This heart rate reading already exists for the selected date.",
+        description: "You already have a heart rate reading for this date. Please edit the existing entry instead.",
         variant: "destructive",
       })
       return
@@ -248,20 +275,22 @@ export default function HealthDataPage() {
     selectedDate.setHours(12, 0, 0, 0)
     const dateString = selectedDate.toISOString()
 
-    // Check for duplicate entries
+    // Check for duplicate entries by date only (ignoring time)
     const isDuplicate = healthData.weight.some((w) => {
       const wDate = new Date(w.date)
-      wDate.setHours(0, 0, 0, 0)
-      const selectedDateMidnight = new Date(selectedDate)
-      selectedDateMidnight.setHours(0, 0, 0, 0)
+      const selectedDateOnly = new Date(selectedDate)
 
-      return w.value === weightValue && wDate.getTime() === selectedDateMidnight.getTime()
+      // Set both dates to start of day for comparison
+      wDate.setHours(0, 0, 0, 0)
+      selectedDateOnly.setHours(0, 0, 0, 0)
+
+      return wDate.getTime() === selectedDateOnly.getTime()
     })
 
     if (isDuplicate) {
       toast({
         title: "Duplicate entry",
-        description: "This weight reading already exists for the selected date.",
+        description: "You already have a weight reading for this date. Please edit the existing entry instead.",
         variant: "destructive",
       })
       return
@@ -298,7 +327,7 @@ export default function HealthDataPage() {
       })
   }
 
-  // Update the handleSleepSubmit function to include sleep quality
+  // Update the handleSleepSubmit function to properly check for duplicates
   const handleSleepSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -327,20 +356,22 @@ export default function HealthDataPage() {
     selectedDate.setHours(12, 0, 0, 0)
     const dateString = selectedDate.toISOString()
 
-    // Check for duplicate entries
+    // Check for duplicate entries by date only (ignoring time)
     const isDuplicate = healthData.sleep.some((s) => {
       const sDate = new Date(s.date)
-      sDate.setHours(0, 0, 0, 0)
-      const selectedDateMidnight = new Date(selectedDate)
-      selectedDateMidnight.setHours(0, 0, 0, 0)
+      const selectedDateOnly = new Date(selectedDate)
 
-      return s.hours === sleepValue && sDate.getTime() === selectedDateMidnight.getTime()
+      // Set both dates to start of day for comparison
+      sDate.setHours(0, 0, 0, 0)
+      selectedDateOnly.setHours(0, 0, 0, 0)
+
+      return sDate.getTime() === selectedDateOnly.getTime()
     })
 
     if (isDuplicate) {
       toast({
         title: "Duplicate entry",
-        description: "This sleep reading already exists for the selected date.",
+        description: "You already have a sleep record for this date. Please edit the existing entry instead.",
         variant: "destructive",
       })
       return
@@ -379,7 +410,6 @@ export default function HealthDataPage() {
   }
 
   // Open edit dialog for a specific reading
-  // Update the openEditDialog function for sleep to include quality
   const openEditDialog = (type: string, index: number) => {
     setEditType(type)
     setEditIndex(index)
@@ -432,7 +462,6 @@ export default function HealthDataPage() {
   }
 
   // Save edited reading
-  // Update the saveEditedReading function for sleep to include quality
   const saveEditedReading = () => {
     if (editIndex === -1) return
 
@@ -542,22 +571,31 @@ export default function HealthDataPage() {
       })
   }
 
+  // Open delete confirmation dialog
+  const confirmDelete = (type: string, index: number) => {
+    setDeleteType(type)
+    setDeleteIndex(index)
+    setDeleteDialogOpen(true)
+  }
+
   // Delete a reading
-  const deleteReading = (type: string, index: number) => {
+  const deleteReading = () => {
+    if (deleteIndex === -1) return
+
     const updatedHealthData = { ...healthData }
 
-    switch (type) {
+    switch (deleteType) {
       case "blood-pressure":
-        updatedHealthData.bloodPressure = updatedHealthData.bloodPressure.filter((_, i) => i !== index)
+        updatedHealthData.bloodPressure = updatedHealthData.bloodPressure.filter((_, i) => i !== deleteIndex)
         break
       case "heart-rate":
-        updatedHealthData.heartRate = updatedHealthData.heartRate.filter((_, i) => i !== index)
+        updatedHealthData.heartRate = updatedHealthData.heartRate.filter((_, i) => i !== deleteIndex)
         break
       case "weight":
-        updatedHealthData.weight = updatedHealthData.weight.filter((_, i) => i !== index)
+        updatedHealthData.weight = updatedHealthData.weight.filter((_, i) => i !== deleteIndex)
         break
       case "sleep":
-        updatedHealthData.sleep = updatedHealthData.sleep.filter((_, i) => i !== index)
+        updatedHealthData.sleep = updatedHealthData.sleep.filter((_, i) => i !== deleteIndex)
         break
     }
 
@@ -567,6 +605,7 @@ export default function HealthDataPage() {
           title: "Reading deleted",
           description: "Your health reading has been deleted successfully.",
         })
+        setDeleteDialogOpen(false)
       })
       .catch((error) => {
         console.error("Error deleting reading:", error)
@@ -678,7 +717,7 @@ export default function HealthDataPage() {
                                   <Button
                                     variant="destructive"
                                     size="sm"
-                                    onClick={() => deleteReading("blood-pressure", index)}
+                                    onClick={() => confirmDelete("blood-pressure", index)}
                                   >
                                     Delete
                                   </Button>
@@ -776,7 +815,7 @@ export default function HealthDataPage() {
                                   <Button
                                     variant="destructive"
                                     size="sm"
-                                    onClick={() => deleteReading("heart-rate", index)}
+                                    onClick={() => confirmDelete("heart-rate", index)}
                                   >
                                     Delete
                                   </Button>
@@ -871,7 +910,7 @@ export default function HealthDataPage() {
                                   <Button
                                     variant="destructive"
                                     size="sm"
-                                    onClick={() => deleteReading("weight", index)}
+                                    onClick={() => confirmDelete("weight", index)}
                                   >
                                     Delete
                                   </Button>
@@ -894,8 +933,6 @@ export default function HealthDataPage() {
           </div>
         </TabsContent>
 
-        {/* Update the sleep form to include quality dropdown */}
-        {/* Replace the sleep form section with this updated version */}
         <TabsContent value="sleep">
           <div className="grid gap-6 md:grid-cols-2">
             <Card>
@@ -981,7 +1018,7 @@ export default function HealthDataPage() {
                                   <Button variant="outline" size="sm" onClick={() => openEditDialog("sleep", index)}>
                                     Edit
                                   </Button>
-                                  <Button variant="destructive" size="sm" onClick={() => deleteReading("sleep", index)}>
+                                  <Button variant="destructive" size="sm" onClick={() => confirmDelete("sleep", index)}>
                                     Delete
                                   </Button>
                                 </div>
@@ -1076,8 +1113,6 @@ export default function HealthDataPage() {
             </div>
           )}
 
-          {/* Update the edit dialog to include sleep quality dropdown */}
-          {/* Add this inside the edit dialog, after the sleep hours input */}
           {editType === "sleep" && (
             <>
               <div className="space-y-2">
@@ -1117,6 +1152,26 @@ export default function HealthDataPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this health reading.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={deleteReading}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

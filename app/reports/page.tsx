@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Header } from "@/components/header"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
@@ -8,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useApp } from "@/context/app-provider"
 import { BarChart3, Download, LineChart, PieChart } from "lucide-react"
-import { useState } from "react"
 import { ProtectedRoute } from "@/components/protected-route"
 import { HealthSummaryChart } from "@/components/charts/health-summary-chart"
 import { BloodPressureChart } from "@/components/charts/blood-pressure-chart"
@@ -17,6 +17,7 @@ import { SleepChart } from "@/components/charts/sleep-chart"
 import { MedicationAdherenceChart } from "@/components/charts/medication-adherence-chart"
 import { AppointmentTypesChart } from "@/components/charts/appointment-types-chart"
 import { AppointmentLocationsChart } from "@/components/charts/appointment-locations-chart"
+import { exportToCSV } from "@/lib/export-utils"
 
 export default function ReportsPage() {
   const { healthData, appointments, medications, initialized } = useApp()
@@ -24,6 +25,66 @@ export default function ReportsPage() {
 
   if (!initialized) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
+  }
+
+  // Filter data based on selected time range
+  const filterDataByTimeRange = (data: any[]) => {
+    if (!data || !Array.isArray(data)) return []
+
+    const endDate = new Date()
+    let startDate: Date
+
+    switch (timeRange) {
+      case "week":
+        startDate = new Date(endDate)
+        startDate.setDate(endDate.getDate() - 7)
+        break
+      case "month":
+        startDate = new Date(endDate)
+        startDate.setMonth(endDate.getMonth() - 1)
+        break
+      case "quarter":
+        startDate = new Date(endDate)
+        startDate.setMonth(endDate.getMonth() - 3)
+        break
+      case "year":
+        startDate = new Date(endDate)
+        startDate.setFullYear(endDate.getFullYear() - 1)
+        break
+      default:
+        startDate = new Date(endDate)
+        startDate.setDate(endDate.getDate() - 7)
+    }
+
+    return data.filter((item) => {
+      const itemDate = new Date(item.date)
+      return itemDate >= startDate && itemDate <= endDate
+    })
+  }
+
+  // Filter health data
+  const filteredHealthData = {
+    bloodPressure: filterDataByTimeRange(healthData.bloodPressure),
+    heartRate: filterDataByTimeRange(healthData.heartRate),
+    weight: filterDataByTimeRange(healthData.weight),
+    sleep: filterDataByTimeRange(healthData.sleep),
+  }
+
+  // Filter appointments
+  const filteredAppointments = filterDataByTimeRange(appointments)
+
+  // Handle export
+  const handleExport = () => {
+    const dataToExport = {
+      bloodPressure: filteredHealthData.bloodPressure,
+      heartRate: filteredHealthData.heartRate,
+      weight: filteredHealthData.weight,
+      sleep: filteredHealthData.sleep,
+      appointments: filteredAppointments,
+      medications: medications,
+    }
+
+    exportToCSV(dataToExport, `health-report-${timeRange}`)
   }
 
   return (
@@ -53,7 +114,7 @@ export default function ReportsPage() {
                       <SelectItem value="year">Last Year</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button variant="outline">
+                  <Button variant="outline" onClick={handleExport}>
                     <Download className="mr-2 h-4 w-4" />
                     Export
                   </Button>
@@ -75,7 +136,7 @@ export default function ReportsPage() {
                         <CardDescription>Overview of your health metrics</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <HealthSummaryChart healthData={healthData} height={300} />
+                        <HealthSummaryChart healthData={filteredHealthData} height={300} timeRange={timeRange as any} />
                       </CardContent>
                     </Card>
 
@@ -85,7 +146,7 @@ export default function ReportsPage() {
                         <CardDescription>Systolic and diastolic readings</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <BloodPressureChart data={healthData.bloodPressure} height={200} />
+                        <BloodPressureChart data={filteredHealthData.bloodPressure} height={200} />
                       </CardContent>
                     </Card>
 
@@ -95,7 +156,7 @@ export default function ReportsPage() {
                         <CardDescription>Average heart rate over time</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <HeartRateChart data={healthData.heartRate} height={200} />
+                        <HeartRateChart data={filteredHealthData.heartRate} height={200} />
                       </CardContent>
                     </Card>
 
@@ -105,7 +166,7 @@ export default function ReportsPage() {
                         <CardDescription>Sleep duration and quality</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <SleepChart data={healthData.sleep} height={200} />
+                        <SleepChart data={filteredHealthData.sleep} height={200} />
                       </CardContent>
                     </Card>
                   </div>
@@ -118,7 +179,7 @@ export default function ReportsPage() {
                         <CardDescription>Detailed view of your vital signs</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <HealthSummaryChart healthData={healthData} height={300} />
+                        <HealthSummaryChart healthData={filteredHealthData} height={300} timeRange={timeRange as any} />
                       </CardContent>
                     </Card>
 
@@ -128,7 +189,7 @@ export default function ReportsPage() {
                         <CardDescription>Detailed blood pressure analysis</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <BloodPressureChart data={healthData.bloodPressure} height={200} />
+                        <BloodPressureChart data={filteredHealthData.bloodPressure} height={200} />
                       </CardContent>
                     </Card>
 
@@ -138,7 +199,7 @@ export default function ReportsPage() {
                         <CardDescription>Detailed heart rate analysis</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <HeartRateChart data={healthData.heartRate} height={200} />
+                        <HeartRateChart data={filteredHealthData.heartRate} height={200} />
                       </CardContent>
                     </Card>
                   </div>
@@ -209,7 +270,7 @@ export default function ReportsPage() {
                         <CardDescription>Types of appointments</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <AppointmentTypesChart appointments={appointments} height={200} />
+                        <AppointmentTypesChart appointments={filteredAppointments} height={200} />
                       </CardContent>
                     </Card>
 
@@ -219,7 +280,7 @@ export default function ReportsPage() {
                         <CardDescription>Locations of your appointments</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <AppointmentLocationsChart appointments={appointments} height={200} />
+                        <AppointmentLocationsChart appointments={filteredAppointments} height={200} />
                       </CardContent>
                     </Card>
                   </div>

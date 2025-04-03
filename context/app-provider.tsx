@@ -222,8 +222,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUserId) return
 
     try {
-      await api.updateUserSettings(currentUserId, newSettings)
+      // First update the state to immediately reflect changes in the UI
       setSettings(newSettings)
+
+      // Then persist to storage/API
+      await api.updateUserSettings(currentUserId, newSettings)
+
+      // Apply theme change immediately
+      if (newSettings.theme) {
+        document.documentElement.setAttribute("data-theme", newSettings.theme)
+      }
+
       toast({
         title: "Settings Updated",
         description: "Your settings have been saved successfully.",
@@ -235,6 +244,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         description: "There was a problem updating your settings.",
         variant: "destructive",
       })
+
+      // Revert to previous settings on error
+      setSettings(settings)
     }
   }
 

@@ -10,10 +10,21 @@ import Image from "next/image"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useState } from "react"
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { NotificationSetup } from "./notification-setup"
+import { translations } from "@/lib/translations"
 
 export function Header() {
-  const { currentDate, logout } = useApp()
+  const { currentDate, logout, settings } = useApp()
   const router = useRouter()
+  const [showNotificationSetup, setShowNotificationSetup] = useState(false)
+
+  // Get translations based on user's language preference
+  const language = settings?.language || "en"
+  const t = (key: string) => {
+    return translations[language]?.[key] || translations["en"][key] || key
+  }
 
   const handleLogout = () => {
     logout()
@@ -37,22 +48,30 @@ export function Header() {
 
         <Link href="/" className="flex items-center gap-2">
           <Image src="/images/logo.png" alt="AfiaTrack Logo" width={32} height={32} className="mr-2" />
-          <span className="hidden font-bold md:inline-block">AfiaTrack</span>
+          <span className="hidden font-bold md:inline-block">{t("appName")}</span>
         </Link>
 
         <div className="flex flex-1 items-center justify-end space-x-2">
           <div className="hidden md:block text-sm text-muted-foreground">{formatDate(currentDate)}</div>
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" onClick={() => setShowNotificationSetup(true)}>
             <Bell className="h-5 w-5" />
-            <span className="sr-only">Notifications</span>
+            <span className="sr-only">{t("notifications")}</span>
           </Button>
           <ModeToggle />
           <Button variant="ghost" size="icon" onClick={handleLogout}>
             <LogOut className="h-5 w-4" />
-            <span className="sr-only">Logout</span>
+            <span className="sr-only">{t("logout")}</span>
           </Button>
         </div>
       </div>
+
+      <Dialog open={showNotificationSetup} onOpenChange={setShowNotificationSetup}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>{t("notifications")}</DialogTitle>
+          <DialogDescription>{t("configureNotifications")}</DialogDescription>
+          <NotificationSetup onClose={() => setShowNotificationSetup(false)} />
+        </DialogContent>
+      </Dialog>
     </header>
   )
 }

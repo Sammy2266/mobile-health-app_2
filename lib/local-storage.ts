@@ -1,41 +1,24 @@
-// Local storage fallback implementation
-
-// Type definitions for user data
-export interface UserProfile {
-  id: string
-  name: string
-  email: string
-  phone?: string
-  age?: number
-  gender?: string
-  height?: number
-  weight?: number
-  bloodType?: string
-  allergies?: string[]
-  medications?: string[]
-  emergencyContact?: {
-    name: string
-    relationship: string
-    phone: string
+export function getLocalStorage(key: string): any {
+  if (typeof window === "undefined") {
+    return null
   }
-  profilePicture?: string
-  userId?: string // Added for database relations
+  try {
+    const item = window.localStorage.getItem(key)
+    return item ? JSON.parse(item) : null
+  } catch (error) {
+    console.error("Error getting item from localStorage:", error)
+    return null
+  }
 }
 
-export interface UserSettings {
-  theme: "light" | "dark" | "system"
-  notifications: {
-    appointments: boolean
-    medications: boolean
-    healthTips: boolean
-    updates: boolean
+export function setLocalStorage(key: string, value: any): void {
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.error("Error setting item to localStorage:", error)
+    }
   }
-  privacySettings: {
-    shareData: boolean
-    anonymousAnalytics: boolean
-  }
-  language: string
-  userId?: string // Added for database relations
 }
 
 export interface UserAppointment {
@@ -82,52 +65,5 @@ export interface UserMedication {
   reminderEnabled: boolean
   reminderTimes: string[] // Array of times in 24h format, e.g. "08:00"
   userId?: string // Added for database relations
-}
-
-export interface UserDocument {
-  id: string
-  title: string
-  type: "report" | "prescription" | "lab_result" | "other"
-  date: string // ISO string
-  fileUrl?: string
-  notes?: string
-  userId?: string // Added for database relations
-}
-
-export interface UserCredentials {
-  id: string
-  username: string
-  email: string
-  password: string // In a real app, this would be hashed
-  createdAt: string // ISO string
-}
-
-export interface VerificationCode {
-  userId: string
-  code: string
-  expiresAt: string // ISO string
-  type: "password_reset"
-}
-
-// Default values
-export const defaultSettings: UserSettings = {
-  theme: "system",
-  notifications: {
-    appointments: true,
-    medications: true,
-    healthTips: true,
-    updates: true,
-  },
-  privacySettings: {
-    shareData: false,
-    anonymousAnalytics: true,
-  },
-  language: "en",
-}
-
-export const defaultProfile: UserProfile = {
-  id: "",
-  name: "",
-  email: "",
 }
 

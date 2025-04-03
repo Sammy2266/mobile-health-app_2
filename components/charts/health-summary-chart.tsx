@@ -7,22 +7,60 @@ import type { UserHealthData } from "@/lib/local-storage"
 interface HealthSummaryChartProps {
   healthData: UserHealthData
   height?: number
+  timeRange?: "week" | "month" | "quarter" | "year"
 }
 
-export function HealthSummaryChart({ healthData, height = 300 }: HealthSummaryChartProps) {
+export function HealthSummaryChart({ healthData, height = 300, timeRange = "week" }: HealthSummaryChartProps) {
   // Ensure healthData and its properties are arrays
   const bloodPressureArray = Array.isArray(healthData?.bloodPressure) ? healthData.bloodPressure : []
   const heartRateArray = Array.isArray(healthData?.heartRate) ? healthData.heartRate : []
   const weightArray = Array.isArray(healthData?.weight) ? healthData.weight : []
 
+  // Get the current date and calculate the start date based on timeRange
+  const endDate = new Date()
+  let startDate: Date
+
+  switch (timeRange) {
+    case "week":
+      startDate = new Date(endDate)
+      startDate.setDate(endDate.getDate() - 7)
+      break
+    case "month":
+      startDate = new Date(endDate)
+      startDate.setMonth(endDate.getMonth() - 1)
+      break
+    case "quarter":
+      startDate = new Date(endDate)
+      startDate.setMonth(endDate.getMonth() - 3)
+      break
+    case "year":
+      startDate = new Date(endDate)
+      startDate.setFullYear(endDate.getFullYear() - 1)
+      break
+    default:
+      startDate = new Date(endDate)
+      startDate.setDate(endDate.getDate() - 7)
+  }
+
+  // Filter data by date range
+  const filterByDateRange = (item: any) => {
+    const itemDate = new Date(item.date)
+    return itemDate >= startDate && itemDate <= endDate
+  }
+
+  // Filter and sort data
+  const filteredBloodPressure = bloodPressureArray.filter(filterByDateRange)
+  const filteredHeartRate = heartRateArray.filter(filterByDateRange)
+  const filteredWeight = weightArray.filter(filterByDateRange)
+
   // Sort all data by date
-  const sortedBloodPressure = [...bloodPressureArray].sort(
+  const sortedBloodPressure = [...filteredBloodPressure].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   )
 
-  const sortedHeartRate = [...heartRateArray].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const sortedHeartRate = [...filteredHeartRate].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-  const sortedWeight = [...weightArray].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const sortedWeight = [...filteredWeight].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // Get all unique dates - use date string without time component to avoid duplicates
   const allDatesMap = new Map()
@@ -84,7 +122,7 @@ export function HealthSummaryChart({ healthData, height = 300 }: HealthSummaryCh
   if (uniqueDates.length === 0) {
     return (
       <div className="flex items-center justify-center h-full min-h-[200px] text-muted-foreground">
-        No health data available
+        No health data available for the selected time range
       </div>
     )
   }

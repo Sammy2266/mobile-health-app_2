@@ -156,18 +156,31 @@ export async function getSettingsForUser(userId: string): Promise<UserSettings> 
 }
 
 export async function updateSettings(userId: string, settings: UserSettings): Promise<UserSettings> {
-  const allSettings = readData<UserSettings & { userId: string }>(STORAGE_KEYS.SETTINGS)
-  const index = allSettings.findIndex((s) => s.userId === userId)
-  const updatedSettings = { ...settings, userId }
+  try {
+    const allSettings = readData<UserSettings & { userId: string }>(STORAGE_KEYS.SETTINGS)
+    const index = allSettings.findIndex((s) => s.userId === userId)
+    const updatedSettings = { ...settings, userId }
 
-  if (index !== -1) {
-    allSettings[index] = updatedSettings
-  } else {
-    allSettings.push(updatedSettings)
+    if (index !== -1) {
+      allSettings[index] = updatedSettings
+    } else {
+      allSettings.push(updatedSettings)
+    }
+
+    // Ensure we write to localStorage synchronously
+    const success = writeData(STORAGE_KEYS.SETTINGS, allSettings)
+
+    if (!success) {
+      console.error("Failed to write settings to localStorage")
+      throw new Error("Failed to save settings")
+    }
+
+    console.log("Settings saved successfully:", updatedSettings)
+    return updatedSettings
+  } catch (error) {
+    console.error("Error saving settings:", error)
+    throw error
   }
-
-  writeData(STORAGE_KEYS.SETTINGS, allSettings)
-  return updatedSettings
 }
 
 // Appointments functions
@@ -480,42 +493,62 @@ export const getHospitalsWithDoctors = () => {
     {
       name: "Kenyatta National Hospital",
       location: "Hospital Road, Nairobi",
-      doctors: ["Dr. Wanjiku Kamau", "Dr. Omondi Ochieng", "Dr. Njeri Mwangi"],
+      doctors: ["Dr. Wanjiku Kamau", "Dr. Omondi Ochieng", "Dr. Njeri Mwangi", "Dr. Kimani Njoroge", "Dr. Auma Otieno"],
     },
     {
       name: "Nairobi Hospital",
       location: "Argwings Kodhek Road, Nairobi",
-      doctors: ["Dr. Kipchoge Kipruto", "Dr. Akinyi Otieno"],
+      doctors: ["Dr. Kipchoge Kipruto", "Dr. Akinyi Otieno", "Dr. Muthoni Wangari", "Dr. Juma Hassan"],
     },
     {
       name: "Aga Khan University Hospital",
       location: "3rd Parklands Avenue, Nairobi",
-      doctors: ["Dr. Muthoni Kariuki", "Dr. Otieno Odinga"],
+      doctors: ["Dr. Muthoni Kariuki", "Dr. Otieno Odinga", "Dr. Fatuma Omar", "Dr. Ahmed Ali", "Dr. Zipporah Wekesa"],
     },
     {
       name: "Moi Teaching and Referral Hospital",
       location: "Nandi Road, Eldoret",
-      doctors: ["Dr. Wambui Gathoni", "Dr. James Maina"],
+      doctors: ["Dr. Wambui Gathoni", "Dr. James Maina", "Dr. Chebet Kiptoo", "Dr. Kipchumba Sang"],
     },
     {
       name: "Coast General Hospital",
       location: "Moi Avenue, Mombasa",
-      doctors: ["Dr. Hassan Ali", "Dr. Fatuma Omar"],
+      doctors: ["Dr. Hassan Ali", "Dr. Fatuma Omar", "Dr. Salim Mohammed", "Dr. Amina Hussein"],
     },
     {
       name: "Gertrude's Children's Hospital",
       location: "Muthaiga Road, Nairobi",
-      doctors: ["Dr. Sarah Kimani", "Dr. Peter Oduor"],
+      doctors: ["Dr. Sarah Kimani", "Dr. Peter Oduor", "Dr. Jane Wanjiru", "Dr. Michael Omondi"],
     },
     {
       name: "MP Shah Hospital",
       location: "Shivachi Road, Nairobi",
-      doctors: ["Dr. Amina Hussein", "Dr. David Njoroge"],
+      doctors: ["Dr. Amina Hussein", "Dr. David Njoroge", "Dr. Esther Wambui", "Dr. Rajesh Patel"],
     },
     {
       name: "Karen Hospital",
       location: "Karen Road, Nairobi",
-      doctors: ["Dr. Elizabeth Wangari", "Dr. John Kamau"],
+      doctors: ["Dr. Elizabeth Wangari", "Dr. John Kamau", "Dr. Betty Chepkorir", "Dr. Samuel Mwangi"],
+    },
+    {
+      name: "Kisumu County Referral Hospital",
+      location: "Kisumu-Kakamega Road, Kisumu",
+      doctors: ["Dr. Onyango Opiyo", "Dr. Achieng Awuor", "Dr. Okoth Omondi", "Dr. Adhiambo Akinyi"],
+    },
+    {
+      name: "Nakuru County Referral Hospital",
+      location: "Kenyatta Avenue, Nakuru",
+      doctors: ["Dr. Kipkorir Sang", "Dr. Chepkoech Jemutai", "Dr. Kiprop Kibet", "Dr. Jelagat Cherono"],
+    },
+    {
+      name: "Machakos Level 5 Hospital",
+      location: "Machakos Town, Machakos",
+      doctors: ["Dr. Mutuku Mwende", "Dr. Muthama Nzisa", "Dr. Kioko Mueni", "Dr. Nduku Musyoka"],
+    },
+    {
+      name: "Nyeri County Referral Hospital",
+      location: "Nyeri Town, Nyeri",
+      doctors: ["Dr. Wachira Mwangi", "Dr. Nyawira Wanjiku", "Dr. Gichuki Nderitu", "Dr. Wairimu Kamau"],
     },
   ]
 }

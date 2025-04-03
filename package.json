@@ -59,10 +59,10 @@
     "vaul": "^0.9.6",
     "zod": "latest",
     "chart.js": "latest",
-    "prisma": "latest",
     "react-chartjs-2": "latest",
-    "uuid": "latest",
-    "@prisma/client": "latest"
+    "fs": "latest",
+    "path": "latest",
+    "uuid": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

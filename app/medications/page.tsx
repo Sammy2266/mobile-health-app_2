@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { Header } from "@/components/header"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
@@ -22,7 +23,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useApp } from "@/context/app-provider"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { BellOff, BellRing, Clock, Plus, Pill, Trash } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -448,19 +449,21 @@ export default function MedicationsPage() {
                                 )}
                               </div>
                               {medication.instructions && <p className="text-sm mt-2">{medication.instructions}</p>}
-                              {medication.reminderEnabled && medication.reminderTimes.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                  {medication.reminderTimes.map((time, index) => (
-                                    <span
-                                      key={index}
-                                      className="text-xs bg-muted px-2 py-0.5 rounded-full flex items-center"
-                                    >
-                                      <Clock className="mr-1 h-3 w-3" />
-                                      {time}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
+                              {medication.reminderEnabled &&
+                                medication.reminderTimes &&
+                                medication.reminderTimes.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {medication.reminderTimes.map((time, index) => (
+                                      <span
+                                        key={index}
+                                        className="text-xs bg-muted px-2 py-0.5 rounded-full flex items-center"
+                                      >
+                                        <Clock className="mr-1 h-3 w-3" />
+                                        {time}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 mt-4 md:mt-0">
                               <Button

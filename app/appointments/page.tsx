@@ -28,6 +28,9 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { ProtectedRoute } from "@/components/protected-route"
 import { getHospitalsWithDoctors } from "@/lib/local-storage-service"
+import { TimePicker } from "@/components/ui/time-picker"
+// Add translations to appointments page
+import { translations } from "@/lib/translations"
 
 const appointmentFormSchema = z.object({
   title: z.string().min(2, {
@@ -51,12 +54,18 @@ const appointmentFormSchema = z.object({
 type AppointmentFormValues = z.infer<typeof appointmentFormSchema>
 
 export default function AppointmentsPage() {
-  const { appointments, updateAppointments, initialized } = useApp()
+  const { appointments, updateAppointments, initialized, settings } = useApp()
   const { toast } = useToast()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [hospitals, setHospitals] = useState<any[]>([])
   const [selectedHospital, setSelectedHospital] = useState<string | null>(null)
   const [availableDoctors, setAvailableDoctors] = useState<string[]>([])
+
+  // Get translations based on user's language preference
+  const language = settings?.language || "en"
+  const t = (key: string) => {
+    return translations[language]?.[key] || translations["en"][key] || key
+  }
 
   const form = useForm<AppointmentFormValues>({
     resolver: zodResolver(appointmentFormSchema),
@@ -168,20 +177,22 @@ export default function AppointmentsPage() {
             <div className="flex flex-col gap-4 md:gap-8">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-2">
-                  <h1 className="text-3xl font-bold tracking-tight">Appointments</h1>
-                  <p className="text-muted-foreground">Manage your upcoming and past appointments</p>
+                  <h1 className="text-3xl font-bold tracking-tight">{t("appointments")}</h1>
+                  <p className="text-muted-foreground">{t("manageAppointments")}</p>
                 </div>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
                     <Button>
                       <Plus className="mr-2 h-4 w-4" />
-                      New Appointment
+                      {t("newAppointment")}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-[#1a2e22] text-white border-health-green-500">
                     <DialogHeader>
-                      <DialogTitle>Schedule Appointment</DialogTitle>
-                      <DialogDescription>Enter the details for your new appointment.</DialogDescription>
+                      <DialogTitle className="text-health-green-300 text-xl">{t("scheduleAppointment")}</DialogTitle>
+                      <DialogDescription className="text-white opacity-80">
+                        {t("enterAppointmentDetails")}
+                      </DialogDescription>
                     </DialogHeader>
                     <Form {...form}>
                       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -190,7 +201,7 @@ export default function AppointmentsPage() {
                           name="title"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Appointment Title</FormLabel>
+                              <FormLabel className="text-white">{t("appointmentTitle")}</FormLabel>
                               <FormControl>
                                 <Input placeholder="Annual checkup" {...field} />
                               </FormControl>
@@ -203,7 +214,7 @@ export default function AppointmentsPage() {
                           name="hospital"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Hospital</FormLabel>
+                              <FormLabel className="text-white">{t("hospital")}</FormLabel>
                               <Select
                                 onValueChange={(value) => {
                                   field.onChange(value)
@@ -212,11 +223,11 @@ export default function AppointmentsPage() {
                                 defaultValue={field.value}
                               >
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select a hospital" />
+                                  <SelectTrigger className="bg-[#1a2e22] border-health-green-700 text-white">
+                                    <SelectValue placeholder={t("selectHospital")} />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent>
+                                <SelectContent className="bg-[#1a2e22] border-health-green-700 text-white">
                                   {hospitals.map((hospital) => (
                                     <SelectItem
                                       key={`${hospital.name}, ${hospital.location}`}
@@ -236,16 +247,16 @@ export default function AppointmentsPage() {
                           name="doctorName"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Doctor</FormLabel>
+                              <FormLabel className="text-white">{t("doctor")}</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
-                                  <SelectTrigger>
+                                  <SelectTrigger className="bg-[#1a2e22] border-health-green-700 text-white">
                                     <SelectValue
-                                      placeholder={selectedHospital ? "Select a doctor" : "Select a hospital first"}
+                                      placeholder={selectedHospital ? t("selectDoctor") : t("selectHospitalFirst")}
                                     />
                                   </SelectTrigger>
                                 </FormControl>
-                                <SelectContent>
+                                <SelectContent className="bg-[#1a2e22] border-health-green-700 text-white">
                                   {availableDoctors.map((doctor) => (
                                     <SelectItem key={doctor} value={doctor}>
                                       {doctor}
@@ -263,14 +274,12 @@ export default function AppointmentsPage() {
                             name="date"
                             render={({ field }) => (
                               <FormItem className="flex flex-col">
-                                <FormLabel>Date</FormLabel>
+                                <FormLabel className="text-white">{t("date")}</FormLabel>
                                 <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
+                                  value={field.value}
+                                  onChange={field.onChange}
                                   disabled={(date) => date < new Date()}
-                                  initialFocus
-                                  className="rounded-md border"
+                                  className="rounded-md"
                                 />
                                 <FormMessage />
                               </FormItem>
@@ -282,11 +291,11 @@ export default function AppointmentsPage() {
                               name="time"
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>Time</FormLabel>
+                                  <FormLabel className="text-white">{t("time")}</FormLabel>
                                   <FormControl>
-                                    <Input type="time" {...field} />
+                                    <TimePicker {...field} />
                                   </FormControl>
-                                  <FormDescription>24-hour format (HH:MM)</FormDescription>
+                                  <FormDescription className="text-health-green-300">{t("timeFormat")}</FormDescription>
                                   <FormMessage />
                                 </FormItem>
                               )}
@@ -296,9 +305,13 @@ export default function AppointmentsPage() {
                               name="notes"
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>Notes</FormLabel>
+                                  <FormLabel className="text-white">{t("notes")}</FormLabel>
                                   <FormControl>
-                                    <Textarea placeholder="Any special instructions or notes" {...field} />
+                                    <Textarea
+                                      placeholder={t("notesPlaceholder")}
+                                      {...field}
+                                      className="bg-[#1a2e22] border-health-green-700 text-white min-h-[100px]"
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -307,7 +320,9 @@ export default function AppointmentsPage() {
                           </div>
                         </div>
                         <DialogFooter>
-                          <Button type="submit">Schedule Appointment</Button>
+                          <Button type="submit" className="bg-health-green-500 hover:bg-health-green-600 text-white">
+                            {t("scheduleAppointment")}
+                          </Button>
                         </DialogFooter>
                       </form>
                     </Form>
@@ -318,8 +333,8 @@ export default function AppointmentsPage() {
               <div className="grid gap-4">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Upcoming Appointments</CardTitle>
-                    <CardDescription>Your scheduled appointments</CardDescription>
+                    <CardTitle>{t("upcomingAppointments")}</CardTitle>
+                    <CardDescription>{t("scheduledAppointments")}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {upcomingAppointments.length > 0 ? (
@@ -363,7 +378,7 @@ export default function AppointmentsPage() {
                                 className="flex items-center gap-1"
                               >
                                 <MapPin className="h-4 w-4" />
-                                Directions
+                                {t("directions")}
                               </Button>
                               <Button
                                 variant="outline"
@@ -380,14 +395,14 @@ export default function AppointmentsPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-muted-foreground">No upcoming appointments</div>
+                      <div className="text-center py-8 text-muted-foreground">{t("noUpcomingAppointments")}</div>
                     )}
                   </CardContent>
                   {upcomingAppointments.length > 0 && (
                     <CardFooter>
                       <p className="text-sm text-muted-foreground">
-                        You have {upcomingAppointments.length} upcoming appointment
-                        {upcomingAppointments.length !== 1 ? "s" : ""}
+                        {t("youHave")} {upcomingAppointments.length}{" "}
+                        {t("upcomingAppointment", { count: upcomingAppointments.length })}
                       </p>
                     </CardFooter>
                   )}
@@ -395,8 +410,8 @@ export default function AppointmentsPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Past Appointments</CardTitle>
-                    <CardDescription>Your completed appointments</CardDescription>
+                    <CardTitle>{t("pastAppointments")}</CardTitle>
+                    <CardDescription>{t("completedAppointments")}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {pastAppointments.length > 0 ? (
@@ -440,7 +455,7 @@ export default function AppointmentsPage() {
                                 className="flex items-center gap-1"
                               >
                                 <MapPin className="h-4 w-4" />
-                                Directions
+                                {t("directions")}
                               </Button>
                               <Button variant="outline" size="icon" onClick={() => handleDelete(appointment.id)}>
                                 <Trash className="h-4 w-4" />
@@ -450,13 +465,14 @@ export default function AppointmentsPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-center py-8 text-muted-foreground">No past appointments</div>
+                      <div className="text-center py-8 text-muted-foreground">{t("noPastAppointments")}</div>
                     )}
                   </CardContent>
                   {pastAppointments.length > 0 && (
                     <CardFooter>
                       <p className="text-sm text-muted-foreground">
-                        You have {pastAppointments.length} past appointment{pastAppointments.length !== 1 ? "s" : ""}
+                        {t("youHave")} {pastAppointments.length}{" "}
+                        {t("pastAppointment", { count: pastAppointments.length })}
                       </p>
                     </CardFooter>
                   )}

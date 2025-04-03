@@ -22,8 +22,17 @@ export const initNotificationSystem = async (): Promise<boolean> => {
     // Create audio element for notifications
     notificationSound = new Audio("/sounds/notification.mp3")
 
-    // Preload the sound
-    notificationSound.load()
+    // Set audio properties
+    notificationSound.preload = "auto"
+
+    // Try to load the sound
+    try {
+      await notificationSound.load()
+      console.log("Notification sound loaded successfully")
+    } catch (loadError) {
+      console.warn("Could not preload notification sound:", loadError)
+      // Continue anyway as the browser might load it when needed
+    }
 
     // Request notification permission if needed
     if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -48,21 +57,44 @@ export const playNotificationSound = async (): Promise<boolean> => {
   try {
     if (!notificationSound) {
       console.warn("Notification sound not initialized")
-      return false
+
+      // Try to create it on-the-fly if it wasn't initialized
+      notificationSound = new Audio("/sounds/notification.mp3")
     }
 
     // Reset the audio to the beginning
     notificationSound.currentTime = 0
 
+    // Set volume to ensure it's audible
+    notificationSound.volume = 1.0
+
     // Play the sound
+    console.log("Attempting to play notification sound...")
     const playPromise = notificationSound.play()
 
     // Handle play promise (required for modern browsers)
     if (playPromise !== undefined) {
-      await playPromise
+      try {
+        await playPromise
+        console.log("Notification sound played successfully")
+        return true
+      } catch (playError) {
+        // This often happens due to browser autoplay policies
+        console.error("Failed to play notification sound:", playError)
+
+        // Try an alternative approach - create a new Audio instance each time
+        try {
+          const tempSound = new Audio("/sounds/notification.mp3")
+          await tempSound.play()
+          console.log("Notification sound played with alternative method")
+          return true
+        } catch (altPlayError) {
+          console.error("Alternative play method also failed:", altPlayError)
+          return false
+        }
+      }
     }
 
-    console.log("Notification sound played successfully")
     return true
   } catch (error) {
     console.error("Failed to play notification sound:", error)
@@ -142,16 +174,18 @@ export const scheduleMedicationReminders = (medications: UserMedication[]): void
   const activeMedications = medications.filter((med) => {
     // Check if medication is active (no end date or end date is in the future)
     const isActive = !med.endDate || new Date(med.endDate) >= new Date()
-    return isActive && med.reminderEnabled && med.reminderTimes.length > 0
+    return isActive && med.reminderEnabled && med.reminderTimes && med.reminderTimes.length > 0
   })
 
   console.log(`Found ${activeMedications.length} active medications with reminders`)
 
   // Schedule new reminders
   activeMedications.forEach((medication) => {
-    medication.reminderTimes.forEach((timeString) => {
-      scheduleReminderForMedication(medication, timeString)
-    })
+    if (medication.reminderTimes && medication.reminderTimes.length > 0) {
+      medication.reminderTimes.forEach((timeString) => {
+        scheduleReminderForMedication(medication, timeString)
+      })
+    }
   })
 
   // Save active timers to localStorage for persistence
@@ -215,15 +249,23 @@ const executeReminder = async (medication: UserMedication): Promise<void> => {
   try {
     console.log(`Executing reminder for ${medication.name}`)
 
-    // Play sound
-    await playNotificationSound()
+    // Play sound first to ensure it's not blocked by browser policies
+    const soundPlayed = await playNotificationSound()
+    console.log(`Sound played: ${soundPlayed}`)
 
     // Show notification
-    showNotification(`Time to take ${medication.name}`, {
+    const notificationShown = showNotification(`Time to take ${medication.name}`, {
       body: `Dosage: ${medication.dosage}${medication.instructions ? `\nInstructions: ${medication.instructions}` : ""}`,
       tag: `medication-${medication.id}`,
       requireInteraction: true,
     })
+
+    console.log(`Notification shown: ${notificationShown}`)
+
+    // If notification failed but sound played, that's still a partial success
+    if (!notificationShown && soundPlayed) {
+      console.log("Notification failed but sound alert worked")
+    }
   } catch (error) {
     console.error(`Error executing reminder for ${medication.name}:`, error)
   }
