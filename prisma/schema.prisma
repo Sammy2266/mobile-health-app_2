@@ -36,7 +36,7 @@ model Profile {
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   dateOfBirth     DateTime?
   gender          String?
-  height          Float?
+  height          Int?
   emergencyContact String?
   phoneNumber     String?
   address         String?

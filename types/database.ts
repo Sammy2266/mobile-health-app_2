@@ -97,7 +97,7 @@ export interface UserCredentials {
   id: string
   username: string
   email: string
-  password: string // In a real app, this would be hashed
+  password: string 
   createdAt: string // ISO string
 }
 
@@ -128,20 +128,5 @@ export const defaultProfile: UserProfile = {
   id: "",
   name: "",
   email: "",
-}
-
-export interface HospitalLocation {
-  id: string
-  name: string
-  address: string
-  location: {
-    lat: number
-    lng: number
-  }
-  phone?: string
-  website?: string
-  rating?: number
-  openNow?: boolean
-  distance?: number
 }
 
