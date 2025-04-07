@@ -120,7 +120,7 @@ export default function TermsOfServicePage() {
                 <div className="space-y-2">
                   <h2 className="text-xl font-semibold">8. Limitation of Liability</h2>
                   <p>
-                    In no event shall AfiaTrack, its directors, employees, partners, agents, suppliers, or affiliates be
+                    In no event shall AfiaTrack, its directors, employees, partners,or affiliates be
                     liable for any indirect, incidental, special, consequential, or punitive damages, including without
                     limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your
                     access to or use of or inability to access or use the App.
